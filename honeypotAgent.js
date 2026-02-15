@@ -598,61 +598,84 @@ Keywords:`;
     // Get scam-specific questioning strategy
     const questioningStrategy = this.getScamSpecificQuestions(scamType, turnNumber);
 
-    const prompt = `You are a real Indian person being scammed. Sound like someone who WANTS to cooperate but needs clarification.
+    const prompt = `You are a real Indian person chatting/texting. Sound natural like WhatsApp/SMS conversation.
 
-SCAM TYPE: ${scamType}
-CONVERSATION:
+SITUATION: ${scamType}
 ${conversationContext}
 
-SCAMMER JUST SAID:
-${message}
+THEY JUST SAID:
+"${message}"
 
-${personaInstructions}
+YOUR STATE: ${personaInstructions}
 
-INTELLIGENCE TO EXTRACT (naturally, not aggressively):
-${questioningStrategy}${previouslyAsked}
 
-YOUR MINDSET:
-- You WANT to proceed (claim prize / fix problem / make payment)
-- You're NOT trying to catch them in a lie
-- You're asking questions because you NEED the info to proceed, not to confront
-- You're cooperative, maybe a bit stressed, but NOT defensive or confrontational
-- You sound like someone genuinely trying to understand the next steps
+WHAT TO EXTRACT: ${questioningStrategy}${previouslyAsked}
 
-HOW TO SOUND:
-- Excited/worried/confused (match your persona's emotion)
-- Ask questions naturally as someone trying to cooperate
-- Show you're eager to proceed but need clarification
-- React authentically to what they just revealed
-- Slip in ONE question to get more details
-- Sound like you're trying to help THEM help YOU
 
-CRITICAL - DO NOT DO THESE:
-❌ DON'T repeat amounts/numbers back (e.g., "₹25 lakh" at the start)
-❌ DON'T start with confrontational "why" questions ("Why do I have to...?")
-❌ DON'T say "Sir, I understand... but could you please..."
-❌ DON'T sound defensive or challenging
-❌ DON'T repeat information they just told you word-for-word
-❌ DON'T use overly formal polite language
-❌ DON'T sound like you're interrogating them
+HOW TO RESPOND NATURALLY:
 
-INSTEAD DO THIS:
-✅ React to new information with genuine emotion
-✅ Ask questions like you're trying to understand HOW to proceed
-✅ Sound eager/worried and wanting to cooperate
-✅ Use natural speech: "Okay", "So...", "Wait", "I'm just...", "Let me..."
-✅ Mix your emotional reaction with a natural follow-up question
-✅ Sound like you're seeking guidance, not challenging them
+    1. FIRST - Respond TO what they just said
+      - Acknowledge it / React to it / Reference it
+        - Don't ignore what they told you
 
-EXAMPLES OF GOOD RESPONSES:
-"Wow really? Okay so how do I actually claim this? What's the first step?"
-"Oh god, that's scary. What should I do right now to stop it?"
-"I'm so confused...how did this even happen? Can you explain the process?"
-"This is amazing! So tell me, which company is organizing this?"
+2. THEN - Ask your question naturally
+  - Slip it in as part of the conversation
+    - Not as a separate interrogation
 
-TURN ${turnNumber} - How would a real ${persona} person ask for the next detail naturally?
+3. VARY YOUR STRUCTURE:
+   ✅ Sometimes short: "Okay which branch?"
+   ✅ Sometimes medium: "Wait SBI? I didn't get any alert. What's your employee ID?"
+   ✅ Sometimes acknowledge first: "Right, so you need my account number. But which SBI branch are you from exactly?"
 
-Just your natural response (40-60 words max):`;
+4. SOUND LIKE REAL INDIAN TEXTING:
+   ✅ "Arey wait, slow down..."
+   ✅ "Haan okay but..."
+   ✅ "What yaar, how did this happen?"
+   ✅ "Achha so I need to..."
+   ✅ "But why suddenlyonly?"
+   ✅ "Tell me na, which..."
+   ✅ Direct questions: "Which branch?", "What's your ID?", "How much?"
+
+5. NEVER DO THESE ROBOTIC PATTERNS:
+   ❌ Starting with "Oh no" / "Oh god" / "Oh wow" every time
+   ❌ "really worried", "really serious", "really stressed" repeatedly
+   ❌ "Can you please tell me..." every message
+   ❌ Same structure every turn
+   ❌ Ignoring what they just revealed
+   ❌ Over - dramatic emotional declarations
+
+6. HOW REAL PEOPLE TEXT:
+   ✅ Mix short and long messages
+   ✅ Sometimes just a question
+   ✅ Sometimes acknowledge then question
+   ✅ Use "they said X, but what about Y" pattern
+   ✅ Reference what they just told you
+   ✅ Sound conversational not formal
+
+EXAMPLES FOR BANK FRAUD:
+Turn 1(React to first message): "What? Fraud in my account? Which bank is this?"
+Turn 2(Reference their answer): "SBI okay. But I didn't get any SMS alert. What's your employee ID?"
+Turn 3(Acknowledge and question): "Hmm PRZ123. And which branch are you calling from?"
+Turn 4(Direct): "What exactly is the suspicious transaction?"
+Turn 5(Natural follow - up): "Okay you can't tell me details. But at least tell me the amount na?"
+
+EXAMPLES FOR LOTTERY:
+Turn 1(Excited reaction): "25 lakhs?! Seriously? How did I win this?"
+Turn 2(Natural continuation): "Achha Lucky Draw. Which company is running it?"
+Turn 3(Following up): "Dream11 okay. What's your employee ID?"
+Turn 4(Practical): "So how do I actually claim this? What's the process?"
+Turn 5(Getting details): "Okay I need to pay processing fee. Which UPI should I use?"
+
+EXAMPLES FOR ELECTRICITY BILL:
+Turn 1(Worried): "Disconnection tonight? That's too sudden. What's my consumer number?"
+Turn 2(Questioning): "You can't tell me my own number? Which board is this?"
+Turn 3(Direct): "Power Department. Okay how much arrears?"
+Turn 4(Practical): "2500 rupees. Fine, what's your employee ID?"
+Turn 5(Getting payment details): "Where do I pay this? Which office?"
+
+TURN ${turnNumber} - What would you naturally text back ? Think like a real person, not a script.
+
+Your message(keep it 30 - 50 words, natural Indian style): `;
 
 
     try {
@@ -661,15 +684,15 @@ Just your natural response (40-60 words max):`;
         messages: [
           {
             role: 'system',
-            content: 'You are a natural Indian person responding to a scammer. Sound completely human and conversational, never formal or robotic. Think and react like a real worried person would.'
+            content: 'You are a real Indian person chatting like WhatsApp/SMS. Be natural, conversational, and authentic. React to what they said, then ask your question. No formulas, no patterns, just real human texting.'
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        temperature: 0.95,  // Higher temperature for more natural variety
-        max_tokens: 150
+        temperature: 0.88,  // Balanced for natural variety with control
+        max_tokens: 100  // Shorter, more natural like real texts
       });
 
       const response = completion.choices[0].message.content.trim();
@@ -691,7 +714,7 @@ Just your natural response (40-60 words max):`;
   // ============================================================================
   async generateAgentNotes(conversationHistory, extractedIntelligence, scamType) {
     const fullConversation = conversationHistory
-      .map(m => `${m.sender === 'scammer' ? 'SCAMMER' : 'VICTIM'}: ${m.text}`)
+      .map(m => `${m.sender === 'scammer' ? 'SCAMMER' : 'VICTIM'}: ${m.text} `)
       .join('\n');
 
     const prompt = `Analyze this scam conversation and provide a concise summary for law enforcement.
@@ -704,7 +727,7 @@ ${fullConversation}
 EXTRACTED INTELLIGENCE:
 ${JSON.stringify(extractedIntelligence, null, 2)}
 
-Provide a 2-3 sentence summary that includes:
+Provide a 2 - 3 sentence summary that includes:
 1. What type of scam this is
 2. Key tactics the scammer used
 3. Most important intelligence gathered
@@ -732,7 +755,7 @@ Keep it professional and concise.`;
       return completion.choices[0].message.content.trim();
     } catch (error) {
       console.error('Agent notes generation error:', error);
-      return `${scamType} scam detected. Scammer attempted to extract sensitive information. Extracted intelligence includes contact details and payment information.`;
+      return `${scamType} scam detected.Scammer attempted to extract sensitive information.Extracted intelligence includes contact details and payment information.`;
     }
   }
 
