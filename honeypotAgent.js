@@ -336,9 +336,59 @@ class AdaptiveHoneypotAgent {
 
   pickFreshOpener(conversationHistory) {
     const openers = [
-      "Ayyo sir", "Actually sir", "One minute", "Wait", "Oh God", "Sir please",
-      "But sir", "Arrey sir", "See sir", "Seriously sir", "I'm telling you", "Listen na",
-      "One sec", "Why like this", "Okay but", "Sir really", "My god"
+// Confused / processing
+  "Actually",
+  "One minute",
+  "Wait",
+  "Just a second",
+  "I'm not understanding this",
+  "This is confusing",
+  "I'm getting worried",
+  "This is sudden",
+  "I'm trying to understand",
+  "Let me check once",
+
+  // Hesitation / delay (very human)
+  "Before that",
+  "Hold on",
+  "Just checking",
+  "Let me see",
+  "One small doubt",
+  "I have one doubt",
+  "Just tell me one thing",
+  "Let me confirm this",
+
+  // Cooperative but cautious
+  "Okay but",
+  "I'm trying to do this",
+  "I'm following what you said",
+  "I'm doing as told",
+  "I'm checking now",
+  "I'm trying from my side",
+  "I'm doing it now",
+
+  // Natural Indian fillers (VERY realistic)
+  "Actually see",
+  "Means",
+  "Basically",
+  "One thing",
+  "Just tell me",
+  "Listen",
+  "See",
+
+  // Emotional but controlled (use sparingly)
+  "Ayyo wait",
+  "This is worrying",
+  "I'm getting scared",
+  "This is unexpected",
+  "Oh",
+
+  // Calm verification phase
+  "Let me verify once",
+  "Before proceeding",
+  "Just to be safe",
+  "I'm double checking",
+  "Let me confirm properly"
     ];
 
     // Get last 3 agent messages
