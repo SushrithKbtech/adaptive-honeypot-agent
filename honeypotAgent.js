@@ -371,7 +371,86 @@ class AdaptiveHoneypotAgent {
       intelligence.transactionIds = [...new Set(txnMatches.map(m => m[1]))];
     }
 
+    // Extract suspicious keywords (urgency, threats, manipulation tactics)
+    const suspiciousPatterns = [
+      // Urgency tactics
+      /\b(urgent|immediately|right now|within \d+ (minutes|hours)|last chance|expire|deadline|today only|hurry|quick|fast)\b/gi,
+      // Threats
+      /\b(blocked?|suspend(ed)?|deactivate|cancel|terminate|legal action|police|arrest|penalty|fine|court)\b/gi,
+      // Authority manipulation
+      /\b(verify|confirm|update|authenticate|validate|security check|mandatory|required|compliance)\b/gi,
+      // Payment pressure
+      /\b(pay now|payment pending|overdue|arrears|dues|refund|cashback|prize|winner|won|claim)\b/gi,
+      // Fake legitimacy
+      /\b(official|authorized|department|government|bank|RBI|income tax|GST|cybercrime|fraud department)\b/gi,
+      // Call to action
+      /\b(click here|tap here|download|install|share|send|forward|call back?|whatsapp|SMS)\b/gi
+    ];
+
+    const allKeywords = new Set();
+    for (const pattern of suspiciousPatterns) {
+      const matches = allText.toLowerCase().match(pattern) || [];
+      matches.forEach(keyword => allKeywords.add(keyword.trim()));
+    }
+    intelligence.suspiciousKeywords = [...allKeywords];
+
     return intelligence;
+  }
+
+  // ============================================================================
+  // LLM-POWERED INTELLIGENCE EXTRACTION (Enhanced)
+  // ============================================================================
+  async extractIntelligenceWithLLM(conversationHistory, scamType) {
+    try {
+      const conversation = conversationHistory
+        .map(m => `${m.sender === 'scammer' ? 'SCAMMER' : 'VICTIM'}: ${m.text}`)
+        .join('\n');
+
+      const prompt = `Analyze this scam conversation and extract ALL suspicious keywords, tactics, and manipulation techniques.
+
+CONVERSATION:
+${conversation}
+
+SCAM TYPE: ${scamType}
+
+Extract and list:
+1. Urgency tactics (e.g., "immediately", "urgent", "within 24 hours")
+2. Threat words (e.g., "blocked", "arrested", "legal action")
+3. Authority claims (e.g., "bank official", "government", "police")
+4. Manipulation phrases (e.g., "verify now", "last chance", "mandatory")
+5. Pressure tactics (e.g., "pay now", "account suspended")
+
+Return ONLY a comma-separated list of suspicious keywords/phrases found (max 20).
+Example: urgent, blocked, verify immediately, legal action, government official, pay now
+
+Keywords:`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert in analyzing scam tactics and identifying manipulation patterns.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 150
+      });
+
+      const keywords = completion.choices[0].message.content.trim()
+        .split(',')
+        .map(k => k.trim())
+        .filter(k => k.length > 0);
+
+      return keywords;
+    } catch (error) {
+      console.error('LLM keyword extraction error:', error);
+      return [];
+    }
   }
 
   // ============================================================================
@@ -387,6 +466,86 @@ class AdaptiveHoneypotAgent {
     }
 
     return merged;
+  }
+
+  // ============================================================================
+  // GET SCAM-SPECIFIC QUESTIONING STRATEGY
+  // ============================================================================
+  getScamSpecificQuestions(scamType, turnNumber) {
+    const strategies = {
+      lottery_prize: `Target: Prize claim process, org name, employee details, payment methods
+- Who is organizing this lottery?
+- What is your employee ID / supervisor name?
+- How do I claim the prize?
+- What processing fees / taxes are involved?
+- Which bank account / UPI should I use to pay?
+- Can I get a reference number?
+- What is the callback number for verification?`,
+
+      bank_fraud: `Target: Bank name, employee ID, branches, account verification, transaction details
+- Which bank are you calling from?
+- What is your employee ID?
+- What branch are you from?
+- What is the suspicious transaction ID?
+- Which merchant was it?
+- Can you give me a callback number?
+- What is the reference case number?`,
+
+      upi_fraud: `Target: Merchant names, transaction IDs, amounts, UPI IDs, phone numbers
+- Which merchant was this payment to?
+- What is the transaction ID?
+- What is your UPI ID for refund?
+- Can you share the exact amount?
+- What phone number can I call back on?
+- Is there a reference number?`,
+
+      delivery_scam: `Target: Tracking IDs, company name, sender details, package contents, fees
+- What is the tracking number?
+- Which courier company?
+- Who is the sender?
+- What's in the package?
+- Where was it shipped from?
+- What fees do I need to pay?
+- Can I get a customer service number?`,
+
+      electricity_bill: `Target: Consumer number, arrears amount, office details, payment methods
+- What is my consumer number?
+- Which electricity board?
+- What is the exact arrears amount?
+- From which office are you calling?
+- What is your employee ID?
+- Where should I pay?
+- Can I get a reference number?`,
+
+      traffic_challan: `Target: Challan number, vehicle number, location, fine amount, officer details
+- What is the challan number?
+- Which vehicle is this for?
+- Where did this violation occur?
+- What is the exact fine amount?
+- What is your officer ID?
+- Which police station?
+- How do I verify this?`,
+
+      kyc_update: `Target: Bank name, employee ID, reason for KYC, documents needed, deadlines
+- Which bank is this for?
+- Why does my KYC need updating?
+- What is your employee ID?
+- What documents do you need?
+- What's the deadline?
+- Can I visit the branch instead?
+- What happens if I don't update?`,
+
+      investment_scam: `Target: Company name, investment scheme, returns promised, payment methods
+- What is your company name?
+- What is the investment scheme?
+- What returns are guaranteed?
+- Who are the founders?
+- Is this SEBI registered?
+- Where do I send the money?
+- Can I get documentation?`
+    };
+
+    return strategies[scamType] || strategies.bank_fraud;
   }
 
   // ============================================================================
@@ -406,6 +565,9 @@ class AdaptiveHoneypotAgent {
     const previouslyAsked = askedQuestions.length > 0
       ? `\n\nQUESTIONS YOU'VE ALREADY ASKED (DO NOT REPEAT THESE):\n${askedQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`
       : '';
+
+    // Get scam-specific questioning strategy
+    const questioningStrategy = this.getScamSpecificQuestions(scamType, turnNumber);
 
     const prompt = `You are playing the role of an Indian person targeted by a scam. Your mission is to:
 1. Keep the scammer engaged in conversation as long as possible
@@ -427,21 +589,27 @@ ${message}
 
 TURN NUMBER: ${turnNumber}${previouslyAsked}
 
+SCAM-SPECIFIC INTELLIGENCE TARGETS FOR ${scamType}:
+${questioningStrategy}
+Ask questions that will extract these specific details. Be natural and don't ask everything at once.
+
 CRITICAL RULES:
 - Keep your response under 2 sentences (40-60 words maximum)
 - Sound COMPLETELY natural and human
 - Don't be overly dramatic on every message (vary your emotions)
-- Ask ONE specific question that will make them reveal information
+- Ask ONE specific question that will make them reveal information RELATED TO THE SCAM TYPE
 - NEVER ask the same question twice - always ask NEW questions
-- If you've already asked about employee ID, ask about something else (phone, org name, reference number, etc.)
+- If you've already asked about employee ID, ask about something else (phone, org name, reference number, callback number, etc.)
+- ANALYZE what information the scammer just revealed and build on it naturally
 - Use Indian English patterns naturally
 - NO emojis, NO obvious AI patterns
 - Don't repeat the same phrases (like "I'm worried") over and over
 - If they mention amounts/fees, react appropriately but then ask specific followup
 - Be adaptive - if they're being vague, push for specifics
 - If they're being pushy, show hesitation but don't shut down completely
+- Think strategically: What key information haven't I extracted yet?
 
-IMPORTANT: Respond as the VICTIM would, naturally and conversationally. Ask a DIFFERENT question than before. Just give me your direct response, nothing else.`;
+IMPORTANT: Respond as the VICTIM would, naturally and conversationally. Ask a DIFFERENT question than before that targets the scam-specific intelligence. Just give me your direct response, nothing else.`;
 
     try {
       const completion = await this.openai.chat.completions.create({
@@ -534,8 +702,17 @@ Keep it professional and concise.`;
       // Detect scam type
       const scamType = this.detectScamType(message, conversationHistory);
 
-      // Extract intelligence from current message
+      // Extract intelligence from current message (regex-based)
       const newIntelligence = this.extractIntelligence(message, conversationHistory);
+
+      // Extract suspicious keywords using LLM (more intelligent)
+      if (conversationHistory.length >= 2) {
+        const llmKeywords = await this.extractIntelligenceWithLLM(conversationHistory, scamType);
+        // Merge LLM keywords with regex keywords
+        newIntelligence.suspiciousKeywords = [
+          ...new Set([...newIntelligence.suspiciousKeywords, ...llmKeywords])
+        ];
+      }
 
       // Generate natural, contextual response with question tracking
       const response = await this.generateResponse(
