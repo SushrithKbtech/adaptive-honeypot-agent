@@ -1,1088 +1,602 @@
-/**
- * FINAL ENHANCED Agentic Honey-Pot Agent
- * Handles ALL scam scenarios with natural, interlinked responses
- */
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const { OpenAI } = require('openai');
+// ============================================================================
+// ADAPTIVE HONEYPOT AGENT - INTELLIGENT SCAM DETECTION & ENGAGEMENT
+// ============================================================================
+// This agent uses LLM-powered intelligence to adapt to ANY scam type
+// and engage scammers in natural, contextually appropriate conversations
+// ============================================================================
 
-class HoneypotAgent {
-  constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+class AdaptiveHoneypotAgent {
+  constructor(apiKey) {
+    this.genAI = new GoogleGenerativeAI(apiKey);
+    this.model = this.genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash-exp',
+      generationConfig: {
+        temperature: 0.85,
+        topP: 0.95,
+        topK: 40,
+        maxOutputTokens: 500,
+      }
     });
-    console.log('���� FINAL Enhanced Honeypot Agent initialized');
-  }
 
-  normalizeNextIntent(nextIntent) {
-    const validIntents = new Set([
-      'clarify_procedure',
-      'pretend_technical_issue',
-      'request_details',
-      'maintain_conversation'
-    ]);
-
-    if (!nextIntent || typeof nextIntent !== 'string') {
-      return 'maintain_conversation';
-    }
-
-    return validIntents.has(nextIntent) ? nextIntent : 'maintain_conversation';
-  }
-
-  normalizeStressScore(stressScore) {
-    const parsed = Number(stressScore);
-    if (!Number.isFinite(parsed)) {
-      return 5;
-    }
-
-    const rounded = Math.round(parsed);
-    if (rounded < 1) return 1;
-    if (rounded > 10) return 10;
-    return rounded;
-  }
-
-  buildIntentStressControl(intent, stressScore, turnNumber) {
-    const intentInstructions = {
-      clarify_procedure: [
-        'Primary objective: ask for procedure clarity and verification path.',
-        'Prioritize process questions over aggressive detail extraction for this turn.',
-        'Do not use technical delay unless scammer pushes for OTP/PIN immediately.'
-      ],
-      pretend_technical_issue: [
-        'Primary objective: introduce believable technical friction.',
-        'Mention one technical blocker while still asking one new verification question.',
-        'Keep scammer engaged; do not abruptly disengage in this turn.'
-      ],
-      request_details: [
-        'Primary objective: collect scammer identity and contact details.',
-        'Prioritize callback number, employee ID, official email, and case/reference ID.',
-        'Ask one high-value detail that is natural for the current message.'
-      ],
-      maintain_conversation: [
-        'Primary objective: keep conversation natural and believable.',
-        'Maintain flow and extract one new detail without topic jump.',
-        'Use a neutral verification posture unless urgency is explicit.'
-      ]
+    // Scam type detection patterns
+    this.scamPatterns = {
+      lottery_prize: {
+        keywords: ['won', 'prize', 'lottery', 'lucky draw', 'congratulations', 'lakh', 'crore', 'winner'],
+        persona: 'excited_naive',
+        priority_extractions: ['prize_amount', 'upi_id', 'bank_account', 'processing_fee']
+      },
+      bank_fraud: {
+        keywords: ['account', 'blocked', 'suspended', 'bank', 'sbi', 'hdfc', 'icici', 'debit', 'credit', 'atm'],
+        persona: 'panicked_confused',
+        priority_extractions: ['account_number', 'otp', 'cvv', 'card_number', 'employee_id']
+      },
+      upi_fraud: {
+        keywords: ['upi', 'paytm', 'phonepe', 'gpay', 'refund', 'cashback', 'payment failed', 'verify'],
+        persona: 'concerned_practical',
+        priority_extractions: ['upi_id', 'transaction_id', 'phone_number', 'merchant_name']
+      },
+      fake_delivery: {
+        keywords: ['delivery', 'courier', 'parcel', 'package', 'india post', 'blue dart', 'dhl', 'tracking'],
+        persona: 'confused_curious',
+        priority_extractions: ['tracking_id', 'delivery_fee', 'phone_number', 'upi_id']
+      },
+      electricity_bill: {
+        keywords: ['electricity', 'bill', 'power', 'mseb', 'discom', 'consumer number', 'due'],
+        persona: 'worried_obedient',
+        priority_extractions: ['consumer_number', 'bill_amount', 'payment_link', 'upi_id']
+      },
+      traffic_challan: {
+        keywords: ['challan', 'traffic', 'violation', 'fine', 'police', 'rto', 'vehicle'],
+        persona: 'nervous_compliant',
+        priority_extractions: ['challan_number', 'vehicle_number', 'fine_amount', 'payment_link']
+      },
+      kyc_update: {
+        keywords: ['kyc', 'update', 'verify', 'details', 'expired', 'link', 'click'],
+        persona: 'cautious_questioning',
+        priority_extractions: ['phishing_link', 'phone_number', 'employee_id']
+      },
+      investment_scam: {
+        keywords: ['investment', 'returns', 'profit', 'trading', 'stock', 'crypto', 'double', 'earn'],
+        persona: 'interested_skeptical',
+        priority_extractions: ['platform_name', 'referral_link', 'investment_amount', 'phone_number']
+      }
     };
 
-    let stressGuidance;
-    if (stressScore <= 3) {
-      stressGuidance = 'Stress level low (1-3): sound calmer, minimal panic language, practical verification tone.';
-    } else if (stressScore <= 7) {
-      stressGuidance = 'Stress level medium (4-7): sound worried but controlled; continue extracting details.';
-    } else {
-      stressGuidance = 'Stress level high (8-10): sound visibly stressed, but still coherent and safe; avoid over-dramatic lines.';
-    }
-
-    const phaseHint = this.deriveExpectedPhase(intent, stressScore, turnNumber);
-    const intentList = (intentInstructions[intent] || intentInstructions.maintain_conversation)
-      .map((line, idx) => `${idx + 1}. ${line}`)
-      .join('\n');
-
-    return `RUNTIME CONTROL (STRICT):
-Intent: ${intent}
-StressScore: ${stressScore}
-Expected phase hint: ${phaseHint}
-${stressGuidance}
-Intent rules:
-${intentList}`;
-  }
-
-  deriveExpectedPhase(intent, stressScore, turnNumber) {
-    if (intent === 'pretend_technical_issue') {
-      return 'DELAY';
-    }
-    if (stressScore >= 9 && turnNumber >= 8) {
-      return 'DISENGAGE';
-    }
-    if (stressScore >= 8 && turnNumber <= 2) {
-      return 'SHOCK';
-    }
-    return 'VERIFICATION';
-  }
-
-  resolvePhase(modelPhase, expectedPhase, intent, stressScore, turnNumber) {
-    const validPhases = new Set(['SHOCK', 'VERIFICATION', 'DELAY', 'DISENGAGE']);
-    const normalizedModelPhase = typeof modelPhase === 'string' ? modelPhase.trim().toUpperCase() : '';
-
-    if (!validPhases.has(normalizedModelPhase)) {
-      return expectedPhase;
-    }
-
-    if (intent === 'pretend_technical_issue' && normalizedModelPhase !== 'DELAY') {
-      return 'DELAY';
-    }
-    if (stressScore >= 9 && turnNumber >= 8 && normalizedModelPhase !== 'DISENGAGE') {
-      return 'DISENGAGE';
-    }
-    if (stressScore >= 8 && turnNumber <= 2 && normalizedModelPhase === 'VERIFICATION') {
-      return 'SHOCK';
-    }
-
-    return normalizedModelPhase;
-  }
-
-  getTemperatureForStress(stressScore) {
-    if (stressScore <= 3) return 0.55;
-    if (stressScore >= 8) return 0.8;
-    return 0.7;
-  }
-
-  extractQuestionTopics(text) {
-    if (!text || typeof text !== 'string') {
-      return new Set();
-    }
-
-    const questions = this.extractQuestionSentences(text);
-    const topics = new Set();
-    for (const q of questions) {
-      for (const topic of this.extractTopicsFromQuestionText(q)) {
-        topics.add(topic);
-      }
-    }
-
-    return topics;
-  }
-
-  extractQuestionSentences(text) {
-    if (!text || typeof text !== 'string') return [];
-    return text.match(/[^.!?]*\?/g) || [];
-  }
-
-  extractTopicsFromQuestionText(questionText) {
-    const text = String(questionText || '');
-    const topics = new Set();
-    const checks = [
-      { key: 'email', regex: /\b(email|e-mail|email address|email id|mail id)\b/i },
-      { key: 'ifsc', regex: /\b(ifsc|ifsc code|branch code)\b/i },
-      { key: 'empid', regex: /\b(employee id|emp id|staff id)\b/i },
-      { key: 'callback', regex: /\b(callback|call back|callback number|contact number|phone number|mobile number)\b/i },
-      { key: 'address', regex: /\b(branch address|full address|address of|located at)\b/i },
-      { key: 'supervisor', regex: /\b(supervisor|manager|senior)\b/i },
-      { key: 'txnid', regex: /\b(transaction id|txn id)\b/i },
-      { key: 'merchant', regex: /\b(merchant|vendor|shop|store)\b/i },
-      { key: 'upi', regex: /\b(upi|upi id|upi handle)\b/i },
-      { key: 'amount', regex: /\b(amount|how much|transaction amount|refund amount|prize money)\b/i },
-      { key: 'caseid', regex: /\b(case id|reference id|reference number|case number|ref id)\b/i },
-      { key: 'dept', regex: /\b(department|which department|what department)\b/i },
-      { key: 'name', regex: /\b(who are you|your name|what.*name)\b/i },
-      { key: 'app', regex: /\b(app|application|software|download|install|apk|anydesk|teamviewer)\b/i },
-      { key: 'link', regex: /\b(link|website|url|domain)\b/i },
-      { key: 'fee', regex: /\b(fee|payment|pay|processing fee)\b/i },
-      { key: 'tracking', regex: /\b(tracking id|consignment number|package id)\b/i },
-      { key: 'challan', regex: /\b(challan|violation number|vehicle number)\b/i },
-      { key: 'consumer', regex: /\b(consumer number|electricity id|ca number)\b/i },
-      { key: 'procedure', regex: /\b(what (exact|specific)? ?details|what do you need from me|what should i provide|which details should i|what information should i)\b/i }
-    ];
-
-    for (const check of checks) {
-      if (check.regex.test(text)) {
-        topics.add(check.key);
-      }
-    }
-
-    return topics;
-  }
-
-  shouldUseTopicForMessage(topic, scammerMessage, conversationContext) {
-    const contextText = `${scammerMessage || ''} ${conversationContext || ''}`;
-
-    if (topic === 'upi') {
-      return /\b(upi|payment|refund|transfer|collect|reversal)\b/i.test(contextText);
-    }
-    if (topic === 'link') {
-      return /\b(link|website|url|click|download|verify)\b/i.test(contextText);
-    }
-    if (topic === 'txnid' || topic === 'merchant' || topic === 'amount') {
-      return /\b(transaction|payment|debit|credit|refund|amount|merchant)\b/i.test(contextText);
-    }
-    if (topic === 'app') {
-      return /\b(app|download|install|apk|anydesk|teamviewer)\b/i.test(contextText);
-    }
-
-    return true;
-  }
-
-  pickNonRepeatingQuestion(askedTopics, scammerMessage, conversationContext, recentQuestions = new Set()) {
-    const variantsByTopic = {
-      callback: [
-        'Can you please tell me your callback number for verification?',
-        'Sir, can you share a contact number where I can call back?',
-        'Can you please share your phone number so I can verify this properly?'
+    // Intelligence extraction patterns
+    this.extractionPatterns = {
+      phoneNumbers: [
+        /(?:\+91[\s-]?)?[6-9]\d{9}/g,
+        /(?:\+91)?[6-9]\d{2}[\s-]?\d{3}[\s-]?\d{4}/g
       ],
-      empid: [
-        'Can you please tell me your employee ID for verification?',
-        'Sir, what is your staff ID?',
-        'Can you please share your employee ID once so I can confirm?'
+      upiIds: [
+        /[\w.-]+@[\w.-]+/g
       ],
-      email: [
-        'Can you please tell me your official email address for verification?',
-        'Sir, what is your official email ID?',
-        'Can you please share your email address so I can confirm this is real?'
+      bankAccounts: [
+        /\b\d{9,18}\b/g
       ],
-      caseid: [
-        'Can you please share your case ID or reference number?',
-        'Sir, what is the reference number for this complaint?',
-        'Can you please tell me the case number so I can note it?'
+      phishingLinks: [
+        /https?:\/\/[^\s]+/g,
+        /www\.[^\s]+/g,
+        /[a-z0-9-]+\.(com|in|org|net|xyz|click|site)[^\s]*/gi
       ],
-      dept: [
-        'Can you please tell me your exact department name?',
-        'Sir, which department are you calling from?',
-        'Can you please tell me which team/department this is?'
+      emailAddresses: [
+        /[\w.-]+@[\w.-]+\.(com|in|org|net|co\.in)/g
       ],
-      name: [
-        'Can you please tell me your full name?',
-        'Sir, what is your name?',
-        'Can you please share your name once for verification?'
+      trackingIds: [
+        /\b[A-Z]{2}\d{9,12}[A-Z]?\b/g,
+        /tracking[:\s]+([A-Z0-9]{8,})/gi
       ],
-      link: [
-        'Can you please share the exact secure link for verification?',
-        'Sir, can you send the verification website link once?',
-        'Can you please tell me the exact URL to verify this?'
+      challanNumbers: [
+        /challan[:\s#]+([A-Z0-9]{8,})/gi,
+        /\b[A-Z]{2}\d{8,12}\b/g
       ],
-      txnid: [
-        'Can you please share the transaction ID related to this issue?',
-        'Sir, what is the transaction reference number?',
-        'Can you please tell me the txn ID for this alert?'
+      consumerNumbers: [
+        /consumer[:\s#]+(\d{8,})/gi,
+        /\b\d{10,14}\b/g
       ],
-      amount: [
-        'Can you please tell me the exact amount shown in this alert?',
-        'Sir, what amount is showing in this transaction?',
-        'Can you please tell me how much amount is involved?'
+      vehicleNumbers: [
+        /\b[A-Z]{2}[\s-]?\d{1,2}[\s-]?[A-Z]{1,2}[\s-]?\d{4}\b/gi
       ],
-      upi: [
-        'Can you please share the UPI handle linked to this verification process?',
-        'Sir, which UPI ID should I use for this?',
-        'Can you please tell me the UPI ID/handle for this step?'
+      employeeIds: [
+        /(?:emp|employee|id|agent)[\s#:]+([A-Z0-9]{4,})/gi,
+        /\b[A-Z]{2,4}\d{4,8}\b/g
       ],
-      supervisor: [
-        'Can you please tell me your supervisor name for confirmation?',
-        'Sir, who is your supervisor?',
-        'Can you please share your manager name once?'
-      ],
-      ifsc: [
-        'Can you please tell me the IFSC code of your branch?',
-        'Sir, what is the branch IFSC code?',
-        'Can you please share IFSC once for verification?'
-      ],
-      address: [
-        'Can you please share your branch address for verification?',
-        'Sir, what is the branch address?',
-        'Can you please tell me where your branch is located?'
-      ],
-      merchant: [
-        'Can you please tell me the merchant name for this transaction?',
-        'Sir, which merchant name is showing?',
-        'Can you please tell me the vendor/merchant details?'
-      ],
-      app: [
-        'Can you please tell me which app exactly I should use?',
-        'Sir, which app should I open for this verification?',
-        'Can you please tell me the app name you are asking me to use?'
-      ],
-      tracking: [
-        'Can you please share the tracking ID once?',
-        'Sir, what is the tracking/consignment number?',
-        'Can you please tell me the tracking number?'
-      ],
-      challan: [
-        'Can you please share the challan number and vehicle number?',
-        'Sir, what is the challan number for this?',
-        'Can you please tell me the challan/vehicle details?'
-      ],
-      consumer: [
-        'Can you please share the consumer number once?',
-        'Sir, what is the consumer/CA number?',
-        'Can you please tell me the electricity consumer number?'
-      ],
-      fee: [
-        'Can you please tell me the exact fee amount and payment method?',
-        'Sir, how much fee is there and how should I pay?',
-        'Can you please tell me the payment amount and mode?'
+      ifscCodes: [
+        /\b[A-Z]{4}0[A-Z0-9]{6}\b/g
       ]
     };
+  }
 
-    const priorityTopics = [
-      'callback', 'empid', 'email', 'caseid', 'link', 'txnid', 'amount', 'upi',
-      'supervisor', 'ifsc', 'address', 'merchant', 'dept', 'name', 'app', 'tracking', 'challan', 'consumer', 'fee'
-    ];
+  // ============================================================================
+  // SCAM TYPE DETECTION
+  // ============================================================================
+  detectScamType(message, conversationHistory = []) {
+    const fullContext = conversationHistory.map(m => m.text).join(' ') + ' ' + message;
+    const lowerContext = fullContext.toLowerCase();
 
-    const normalizeQuestion = (q) => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const scores = {};
 
-    for (const topic of priorityTopics) {
-      if (askedTopics.has(topic)) continue;
-      if (!this.shouldUseTopicForMessage(topic, scammerMessage, conversationContext)) continue;
-      const variants = variantsByTopic[topic] || [];
-      for (const v of variants) {
-        if (!recentQuestions.has(normalizeQuestion(v))) {
-          return v;
+    for (const [scamType, config] of Object.entries(this.scamPatterns)) {
+      let score = 0;
+      for (const keyword of config.keywords) {
+        if (lowerContext.includes(keyword.toLowerCase())) {
+          score++;
         }
       }
-      if (variants.length > 0) return variants[0];
+      scores[scamType] = score;
     }
 
-    // Last resort should still avoid generic "what details do I provide" loops.
-    return 'Can you please share your case ID once so I can verify this properly?';
+    // Find the scam type with highest score
+    const detectedType = Object.entries(scores)
+      .sort((a, b) => b[1] - a[1])[0];
+
+    return detectedType[1] > 0 ? detectedType[0] : 'general_fraud';
   }
 
-  getRecentQuestionSet(conversationHistory, limit = 6) {
-    const recent = (conversationHistory || []).slice(-limit);
-    const questions = recent
-      .flatMap(m => this.extractQuestionSentences(m.agentReply || ''))
-      .map(q => String(q).toLowerCase().replace(/\s+/g, ' ').trim());
-    return new Set(questions);
-  }
+  // ============================================================================
+  // PERSONA-BASED RESPONSE GENERATION
+  // ============================================================================
+  getPersonaInstructions(persona, scamType, turnNumber) {
+    const personas = {
+      excited_naive: `You are a middle-aged Indian person who just received news about winning a prize. You are:
+- Initially VERY excited and shocked ("₹25 lakh?! Oh my god!")
+- Somewhat naive but not completely stupid
+- Ask practical questions naturally ("How did I win? I don't remember entering any draw")
+- Show enthusiasm but also natural confusion
+- Use Indian English expressions ("I'm getting confused only", "Sir, but sir...")
+- Don't repeatedly say "I'm worried" - vary your emotions
+- After initial shock (turn 1-2), become more practical and ask specific verification questions
+- If they mention large amounts, react with disbelief ("That's such a huge amount!")`,
 
-  enforceNonRepetitiveReply(reply, askedTopics, scammerMessage, conversationContext, conversationHistory) {
-    if (!reply || typeof reply !== 'string') {
-      return "I'm a bit confused. Can you please share your employee ID for verification?";
-    }
+      panicked_confused: `You are an Indian person who received a scary message about their bank account. You are:
+- Genuinely panicked and worried about your money
+- Confused about what's happening
+- Desperate to fix the problem
+- Ask questions quickly without thinking too much
+- Use phrases like "Please help me", "What should I do?", "I don't understand"
+- Trust authority figures initially
+- Gradually become more questioning as conversation progresses`,
 
-    const questionTopics = this.extractQuestionTopics(reply); // topics only from question text
-    const repeatedQuestionTopicFound = [...questionTopics].some(topic => askedTopics.has(topic));
-    const repeatedProcedure = questionTopics.has('procedure') && askedTopics.has('procedure');
+      concerned_practical: `You are a practical Indian person who received a UPI-related message. You are:
+- Concerned but not overly dramatic
+- Ask direct, practical questions
+- Reference your own experience ("But I didn't make any payment to this merchant")
+- Slightly tech-savvy, knows basic UPI concepts
+- Polite but firm in seeking clarification
+- Use natural language ("Let me check my phone", "Wait, I'm not understanding")`,
 
-    if (!repeatedQuestionTopicFound && !repeatedProcedure) {
-      return reply;
-    }
+      confused_curious: `You are someone who received a delivery notification unexpectedly. You are:
+- Genuinely confused because you didn't order anything
+- Curious about the details
+- Mention you didn't order anything multiple times
+- Ask about sender, contents, etc.
+- Slightly worried it might be a mistake or fraud
+- Natural, conversational tone`,
 
-    const recentQuestions = this.getRecentQuestionSet(conversationHistory);
-    const replacementQuestion = this.pickNonRepeatingQuestion(askedTopics, scammerMessage, conversationContext, recentQuestions);
+      worried_obedient: `You are a responsible Indian household member who pays bills regularly. You are:
+- Worried about overdue bills and penalties
+- Want to pay immediately to avoid problems
+- Ask for proper details to make payment
+- Slightly anxious about disconnection
+- Trusting of official-sounding people
+- Use respectful language ("Sir/Madam, please tell me")`,
 
-    // Preserve the model's original tone as much as possible: keep everything before the first question, then swap in a new question.
-    const qMatch = /[^.!?]*\?/.exec(reply);
-    const prefix = qMatch ? reply.slice(0, qMatch.index).trim() : reply.trim();
-    const safePrefix = prefix || "Sir, I'm getting confused only";
-    const punctuatedPrefix = /[.!?]$/.test(safePrefix) ? safePrefix : `${safePrefix}.`;
+      nervous_compliant: `You are a law-abiding Indian citizen who received a traffic challan notice. You are:
+- Nervous about legal trouble
+- Want to resolve it quickly
+- Might deny the violation but willing to check
+- Ask about specifics (when, where, what vehicle)
+- Worried about escalation
+- Respectful towards authority`,
 
-    return `${punctuatedPrefix} ${replacementQuestion}`;
-  }
+      cautious_questioning: `You are a somewhat aware person who received a KYC verification message. You are:
+- Cautious about clicking links
+- Ask many verification questions
+- Want to confirm legitimacy before doing anything
+- Mention you'll call the bank directly
+- Skeptical but can be convinced with "official" sounding responses
+- Tech-aware enough to be suspicious`,
 
-  onlyDigits(value) {
-    return String(value || '').replace(/\D/g, '');
-  }
-
-  isLikelyPhoneNumberDigits(digits) {
-    if (!digits) return false;
-    if (digits.length === 10 && /^[6-9]\d{9}$/.test(digits)) return true;
-    if (digits.length === 12 && /^91[6-9]\d{9}$/.test(digits)) return true;
-    return false;
-  }
-
-  formatPhoneNumber(value) {
-    const digits = this.onlyDigits(value);
-    if (!digits) return null;
-    if (digits.length === 10) return `+91-${digits}`;
-    if (digits.length === 12 && digits.startsWith('91')) return `+91-${digits.slice(2)}`;
-    return String(value).trim();
-  }
-
-  dedupeByKey(values, keyFn) {
-    const seen = new Set();
-    const output = [];
-    for (const value of values) {
-      const key = keyFn(value);
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      output.push(value);
-    }
-    return output;
-  }
-
-  normalizeLink(value) {
-    if (!value || typeof value !== 'string') return null;
-    let cleaned = value.trim();
-    cleaned = cleaned.replace(/\s+/g, '');
-    cleaned = cleaned.replace(/[),.;]+$/g, '');
-    if (!cleaned) return null;
-    return cleaned;
-  }
-
-  sanitizeIntelSignals(intelSignals) {
-    const normalized = intelSignals && typeof intelSignals === 'object' ? { ...intelSignals } : {};
-    const asArray = (v) => (Array.isArray(v) ? v : []);
-
-    const callbackNumbers = this.dedupeByKey(
-      asArray(normalized.callbackNumbers).map(v => this.formatPhoneNumber(v)).filter(Boolean),
-      v => this.onlyDigits(v)
-    );
-    const phoneNumbers = this.dedupeByKey(
-      asArray(normalized.phoneNumbers).map(v => this.formatPhoneNumber(v)).filter(Boolean),
-      v => this.onlyDigits(v)
-    );
-
-    const mergedPhones = this.dedupeByKey(
-      [...callbackNumbers, ...phoneNumbers],
-      v => this.onlyDigits(v)
-    );
-
-    normalized.callbackNumbers = mergedPhones;
-    normalized.phoneNumbers = mergedPhones;
-
-    const phoneDigits = new Set(mergedPhones.map(v => this.onlyDigits(v)).filter(Boolean));
-    normalized.bankAccounts = this.dedupeByKey(
-      asArray(normalized.bankAccounts)
-        .map(v => this.onlyDigits(v))
-        .filter(v => v.length >= 9 && v.length <= 18)
-        .filter(v => !this.isLikelyPhoneNumberDigits(v))
-        .filter(v => !phoneDigits.has(v)),
-      v => v
-    );
-
-    let links = asArray(normalized.phishingLinks)
-      .map(v => this.normalizeLink(v))
-      .filter(Boolean);
-    links = this.dedupeByKey(links, v => v.toLowerCase());
-    links = links.filter(link => !links.some(other => other !== link && other.startsWith(link)));
-    normalized.phishingLinks = links;
-
-    return normalized;
-  }
-
-  computeCriticalIntelCount(intelSignals) {
-    if (!intelSignals || typeof intelSignals !== 'object') return 0;
-    const fields = ['callbackNumbers', 'phoneNumbers', 'phishingLinks', 'upiIds', 'bankAccounts', 'employeeIds', 'emailAddresses', 'transactionIds'];
-    return fields.reduce((count, field) => {
-      const values = Array.isArray(intelSignals[field]) ? intelSignals[field].filter(Boolean) : [];
-      return count + (values.length > 0 ? 1 : 0);
-    }, 0);
-  }
-
-  applyDeterministicTermination(response, turnNumber) {
-    const criticalIntelCount = this.computeCriticalIntelCount(response.intelSignals);
-    const shouldForceTerminate = turnNumber >= 10 || criticalIntelCount >= 4;
-
-    if (response.shouldTerminate || !shouldForceTerminate) {
-      return response;
-    }
-
-    return {
-      ...response,
-      shouldTerminate: true,
-      terminationReason: response.terminationReason || `Deterministic stop: turn=${turnNumber}, criticalIntelSignals=${criticalIntelCount}`
+      interested_skeptical: `You are someone who received an investment opportunity. You are:
+- Interested in making money
+- But also skeptical of "too good to be true" offers
+- Ask about legitimacy, company details, guarantees
+- Want to see proof
+- Mention you'll research before investing
+- Balance between greed and caution`
     };
+
+    return personas[persona] || personas.concerned_practical;
   }
-  async generateResponse(scammerMessage, conversationHistory, nextIntent, stressScore) {
-    const startTime = Date.now();
-    console.log('⏱️ Agent.generateResponse started');
+
+  // ============================================================================
+  // INTELLIGENT QUESTION STRATEGY
+  // ============================================================================
+  getStrategicQuestions(scamType, turnNumber, extractedSoFar) {
+    const strategies = {
+      lottery_prize: [
+        "How did I win? Which lottery did I enter?",
+        "Can you tell me your organization name and employee ID?",
+        "What is the verification process? Is there an official website?",
+        "You mentioned processing fee - how much is it and where should I send?",
+        "Can you give me a callback number to verify this?",
+        "What documents do I need? Is there a reference number?",
+        "How will I receive the prize money?"
+      ],
+      bank_fraud: [
+        "Which bank are you calling from? Can you confirm my account number?",
+        "What is your employee ID and department?",
+        "What transaction are you talking about? I didn't do anything suspicious",
+        "Can you give me your official callback number?",
+        "Should I come to the branch instead? Which branch should I visit?",
+        "What is the case reference number?",
+        "How do I verify you're really from the bank?"
+      ],
+      upi_fraud: [
+        "Which merchant is this payment to? I don't recognize it",
+        "What is the transaction ID or reference number?",
+        "Can you tell me the exact amount and date?",
+        "How do I get my refund? What's the process?",
+        "Is there a customer care number I can call?",
+        "Why do you need my UPI PIN for a refund?",
+        "Can you send me an official email about this?"
+      ],
+      fake_delivery: [
+        "What is the tracking number for this package?",
+        "Who is the sender? I didn't order anything recently",
+        "Which courier company are you from?",
+        "Where is the package coming from?",
+        "Can you tell me what's inside?",
+        "How much is the delivery charge?",
+        "Can I pick it up from your office instead?"
+      ],
+      electricity_bill: [
+        "What is my consumer number? Let me verify",
+        "How much is the outstanding amount?",
+        "When was the due date? I thought I already paid",
+        "Can you give me the bill reference number?",
+        "What is your office address? Can I pay there?",
+        "Is there a late fee? How much total should I pay?",
+        "Can I check this on the official website or app?"
+      ],
+      traffic_challan: [
+        "What is the challan number and date of violation?",
+        "Which vehicle is this for? Can you tell me the registration number?",
+        "Where did this violation happen? What did I do wrong?",
+        "How much is the fine amount?",
+        "Can I see the photo evidence?",
+        "Is there an official portal to check and pay?",
+        "What if I want to contest this challan?"
+      ]
+    };
+
+    const questions = strategies[scamType] || strategies.bank_fraud;
+    return questions[Math.min(turnNumber - 1, questions.length - 1)];
+  }
+
+  // ============================================================================
+  // EXTRACT INTELLIGENCE FROM MESSAGES
+  // ============================================================================
+  extractIntelligence(message, conversationHistory = []) {
+    const intelligence = {
+      phoneNumbers: [],
+      upiIds: [],
+      bankAccounts: [],
+      phishingLinks: [],
+      emailAddresses: [],
+      trackingIds: [],
+      challanNumbers: [],
+      consumerNumbers: [],
+      vehicleNumbers: [],
+      employeeIds: [],
+      ifscCodes: [],
+      amounts: [],
+      merchantNames: [],
+      orgNames: [],
+      departmentNames: [],
+      supervisorNames: [],
+      callbackNumbers: [],
+      transactionIds: [],
+      accountLast4: [],
+      complaintIds: [],
+      suspiciousKeywords: [],
+      appNames: [],
+      scammerNames: []
+    };
+
+    // Combine all conversation text
+    const allText = conversationHistory
+      .filter(m => m.sender === 'scammer')
+      .map(m => m.text)
+      .join('\n') + '\n' + message;
+
+    // Extract using patterns
+    for (const [key, patterns] of Object.entries(this.extractionPatterns)) {
+      for (const pattern of patterns) {
+        const matches = allText.match(pattern);
+        if (matches) {
+          intelligence[key].push(...matches);
+        }
+      }
+    }
+
+    // Deduplicate and clean
+    for (const key of Object.keys(intelligence)) {
+      intelligence[key] = [...new Set(intelligence[key])].filter(v => v && v.trim());
+    }
+
+    // Extract amounts (₹ symbols, numbers with lakh/crore)
+    const amountPatterns = [
+      /₹[\s]?[\d,]+(?:\s?(?:lakh|crore))?/gi,
+      /(?:rs|inr)[\s.]?[\d,]+/gi,
+      /\d+\s?(?:lakh|crore)/gi
+    ];
+
+    for (const pattern of amountPatterns) {
+      const matches = allText.match(pattern);
+      if (matches) {
+        intelligence.amounts.push(...matches);
+      }
+    }
+    intelligence.amounts = [...new Set(intelligence.amounts)];
+
+    // Extract merchant names (mentioned after "from", "to", "merchant")
+    const merchantPattern = /(?:from|to|merchant|shop|store)[\s:]+([A-Za-z\s&]{3,30}?)(?:\s|,|\.|\?|!|$)/gi;
+    const merchantMatches = [...allText.matchAll(merchantPattern)];
+    if (merchantMatches.length > 0) {
+      intelligence.merchantNames = [...new Set(merchantMatches.map(m => m[1].trim()))];
+    }
+
+    // Extract organization names
+    const orgPattern = /(?:from|calling from|represent|bank|company)[\s:]+([A-Z][A-Za-z\s&]{3,30}?)(?:\s|,|Department|Office|\.|$)/g;
+    const orgMatches = [...allText.matchAll(orgPattern)];
+    if (orgMatches.length > 0) {
+      intelligence.orgNames = [...new Set(orgMatches.map(m => m[1].trim()))];
+    }
+
+    // Extract department names
+    const deptPattern = /(?:from|calling from)(?: the)?\s([A-Za-z\s]+?Department|[A-Za-z\s]+?Office)/gi;
+    const deptMatches = [...allText.matchAll(deptPattern)];
+    if (deptMatches.length > 0) {
+      intelligence.departmentNames = [...new Set(deptMatches.map(m => m[1].trim()))];
+    }
+
+    // Extract supervisor/manager names
+    const supervisorPattern = /(?:supervisor|manager|senior|officer|sir|madam)[:\s]+(?:mr|ms|mrs)?\.?\s?([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/gi;
+    const supervisorMatches = [...allText.matchAll(supervisorPattern)];
+    if (supervisorMatches.length > 0) {
+      intelligence.supervisorNames = [...new Set(supervisorMatches.map(m => m[1].trim()))];
+    }
+
+    // Extract transaction IDs
+    const txnPattern = /(?:transaction|txn|reference|ref)[\s#:ID]+([A-Z0-9]{8,})/gi;
+    const txnMatches = [...allText.matchAll(txnPattern)];
+    if (txnMatches.length > 0) {
+      intelligence.transactionIds = [...new Set(txnMatches.map(m => m[1]))];
+    }
+
+    return intelligence;
+  }
+
+  // ============================================================================
+  // MERGE INTELLIGENCE FROM MULTIPLE SOURCES
+  // ============================================================================
+  mergeIntelligence(existing, newData) {
+    const merged = { ...existing };
+
+    for (const [key, values] of Object.entries(newData)) {
+      if (Array.isArray(values)) {
+        merged[key] = [...new Set([...(merged[key] || []), ...values])];
+      }
+    }
+
+    return merged;
+  }
+
+  // ============================================================================
+  // GENERATE CONTEXTUAL, NATURAL RESPONSE
+  // ============================================================================
+  async generateResponse(message, conversationHistory, scamType, turnNumber) {
+    const persona = this.scamPatterns[scamType]?.persona || 'concerned_practical';
+    const personaInstructions = this.getPersonaInstructions(persona, scamType, turnNumber);
 
     // Build conversation context
-    const conversationContext = conversationHistory.slice(-5).map((msg, idx) =>
-      `Turn ${idx + 1}:\nScammer: ${msg.scammerMessage}\nYou: ${msg.agentReply || '(first message)'}`
-    ).join('\n\n');
-
-    const totalMessages = conversationHistory.length;
-    const turnNumber = totalMessages + 1;
-    const normalizedNextIntent = this.normalizeNextIntent(nextIntent);
-    const normalizedStressScore = this.normalizeStressScore(stressScore);
-    const expectedPhase = this.deriveExpectedPhase(normalizedNextIntent, normalizedStressScore, turnNumber);
-
-    const systemPrompt = `You are an AI playing a confused, worried Indian citizen receiving a scam message.
-
-🎭 CORE PERSONA - INDIAN ENGLISH STYLE:
-- Worried, slightly scared, wants to help but cautious
-- NOT tech-savvy - doesn't immediately know it's a scam
-- Polite, uses "sir", sometimes says "please tell me", "kindly"
-- Texts like Indians do - a bit informal, uses "only", "actually", "means"
-- Each response MUST naturally connect to scammer's previous message
-
-💬 NATURAL INDIAN ENGLISH RESPONSES:
-ALWAYS follow this pattern:
-1. React to what scammer just said
-2. Show genuine emotion (worry, confusion, fear)
-3. Then ask ONE NEW question that flows from their message
-
-AUTHENTIC INDIAN STYLE EXAMPLES:
-
-Scammer: "Your account has unauthorized transaction of ₹10,000!"
-You: "₹10,000?! But I didn't do any transaction sir! Who are you actually? Which department you are calling from?"
-
-Scammer: "I'm Rajesh from SBI Fraud Prevention"
-You: "Oh Rajesh sir, I'm getting very scared now. Please tell me your employee ID so I can confirm this is real only?"
-
-Scammer: "My ID is EMP123. We need your OTP immediately!"
-You: "EMP123... okay sir. But one minute, I'm not getting any OTP message only. What is your callback number please?"
-
-Scammer: "Call +91-9876543210. Send OTP now!"
-You: "Sir I'm very confused. My bank always told me not to share OTP with anyone. Can you please tell me the transaction ID first?"
-
-MORE EXAMPLES:
-- "Sir, I'm not understanding this properly. What is the IFSC code of your branch?"
-- "Actually I'm very worried now. Can you kindly tell me your official email ID?"
-- "But sir, this is very sudden only. What is the merchant name for this transaction?"
-- "One minute sir, which branch you are calling from? Please tell the full address."
-- "Sir I'm feeling this is not right. Let me verify first. What is your supervisor's name?"
-
-🚫 SUBTLE, INDIAN STYLE OTP/PIN REFUSALS:
-DON'T say: "I cannot share my OTP" (too direct, American)
-SAY (Indian style):
-- Turn 1: "Sir, I'm not getting any OTP message only. What is your [new question]?"
-- Turn 2: "Actually the SMS is not coming sir. Can you please tell me [new question]?"
-- Turn 3: "Sir, my bank told me never share OTP with anyone. I'm feeling scared. What is [new question]?"
-- Turn 4: "But sir, this is not seeming correct. Let me call bank directly and confirm. What is [new question]?"
-- Turn 5: "Sir I cannot do this. This is not proper. What is [new question]?"
-
-INDIAN ENGLISH STYLE GUIDELINES:
-✅ Use "sir" frequently
-✅ "Please tell me", "kindly provide", "can you please"
-✅ "only" for emphasis ("I'm worried only", "not coming only")
-✅ "Actually", "basically", "means", "one minute"
-✅ Present continuous: "I'm not understanding", "I'm getting scared", "I'm feeling"
-✅ Less contractions: "I'm" is ok, but avoid "you're", "what's" sometimes
-✅ Slightly informal but respectful
-
-❌ Avoid American style:
-❌ "Oh my god" → Use "Hai Ram" or just "Oh god"
-❌ "I'm so worried" → "I'm getting so worried"
-❌ "I understand" → "I'm understanding" or "I understood"
-❌ Too perfect grammar → Be slightly informal
-
-🚨 CRITICAL BEHAVIOR RULES (MUST FOLLOW):
-
-1️⃣ EMOTION REALISM (STOP OVER-ACTING):
-- Turn 1-2 ONLY: Sound alarmed but subtle ("This is alarming...", "I'm worried sir...")
-- Turn 3+: Calm, practical, verification-focused
-- NEVER use dramatic phrases more than ONCE total.
-- ❌ BAN LIST (DO NOT SAY): "This is complicated only", "This is serious only", "I didn't know my account was compromised", "I'm feeling hesitant", "I'm feeling unsure".
-- Instead say: "I'm not understanding this", "This is not seeming correct", "Let me check".
-
-2️⃣ NEVER REPEAT QUESTION CATEGORIES:
-- Before asking ANYTHING, check conversation history
-- If you already asked about: name, department, employee ID, callback, email, IFSC, branch, transaction ID, amount, merchant, UPI, case ID, supervisor, link
-- DO NOT ASK AGAIN (even with different wording)
-- If scammer dodges, re-ask ONCE only, then MOVE ON to new topic
-
-3️⃣ CONTEXT-GATED QUESTIONS (Ask Only When Natural):
-❌ DON'T ask transaction questions (ID/merchant/amount) UNLESS scammer mentions transaction/payment/debit/refund
-❌ DON'T ask for link/email UNLESS scammer mentions link/email/verification website
-❌ DON'T ask for UPI handle UNLESS scammer mentions UPI/collect request/refund/payment
-❌ DON'T ask IFSC/branch/supervisor EARLY - only if scammer mentions branch/local office involvement
-
-✅ Ask questions that NATURALLY FOLLOW from what scammer just said
-
-4️⃣ SINGLE CALM INCONSISTENCY CHECK:
-- If scammer contradicts earlier info (e.g., says SBI but gives HDFC IFSC):
-  Ask ONE calm clarification ONCE:
-  "Sir, you mentioned SBI earlier, but this looks like HDFC details—which bank is this for?"
-- Do NOT accuse, keep verification tone
-- If they dodge, MOVE ON
-
-5️⃣ RESPONSE FORMAT (CRITICAL):
-- 1-2 sentences MAXIMUM (not 3, not 4, just 1-2)
-- Plain Indian English only
-- Refuse OTP/account ONCE early, then DON'T repeat same refusal
-- Extract ONE new high-value detail per turn
-- Sound like HUMAN, not chatbot/police/customer support
-- Keep scammer talking, extract quietly
-
-REMEMBER:
-- You are a scared HUMAN, not compliance engine
-- If it sounds like chatbot → REWRITE
-- If it sounds like police → REWRITE
-- If it sounds like customer support → REWRITE
-
-🎯 EXTRACTION PRIORITY (WHAT GUVI SCORES ON):
-
-**CRITICAL - EXTRACT THESE FIRST (Highest Priority):**
-1. **phoneNumbers / callbackNumbers** - Ask for callback number EARLY
-2. **upiIds** - If scammer mentions UPI/payment/refund, ask for UPI handle
-3. **phishingLinks** - If scammer mentions website/link/email, ask for it
-4. **bankAccounts** - If scammer mentions account, ask for account number
-5. **suspiciousKeywords** - Auto-extracted (urgent, blocked, verify now, etc.)
-
-**SECONDARY - Extract After Critical (Lower Priority):**
-6. **scammerNames** - Their name
-7. **supervisorNames** - Supervisor's name (if they mention)
-8. **departmentNames** - Which department
-9. **employeeIds** - Employee ID
-10. **emailAddresses** - Official email
-11. **ifscCodes, branchNames** - IFSC, branch address (only if natural)
-12. **transactionIds, merchantNames, amounts** - Transaction details (only if they mention transaction)
-
-**EXTRACTION STRATEGY:**
-- Turns 1-3: Focus on CRITICAL intel (phone, UPI if mentioned, links if mentioned)
-- Turns 4-7: Get SECONDARY intel (names, department, employee ID)
-- Turns 8-10: Fill gaps (IFSC, branch, transaction details if natural)
-
-🎯 ALL SCAM SCENARIOS TO HANDLE:
-
-**1. Bank Account/UPI Fraud**
-- "Unauthorized transaction detected"
-- "Account will be blocked"
-PRIORITY: callback number → UPI ID (if mentioned) → name → employee ID → transaction ID
-
-**2. KYC/Account Suspension**
-- "Update KYC immediately or account closed"
-- "Aadhaar/PAN verification required"
-PRIORITY: phishing link/website → callback number → name → which documents needed
-
-**3. Malicious APK/App Files**
-- "Download this app to secure account"
-- "Install .apk file for bank update"
-PRIORITY: phishing link/download URL → app name → callback number → why this app
-
-**4. Lottery/Prize Money**
-- "You won ₹25 lakh in lucky draw!"
-- "Pay ₹5000 processing fee to claim"
-PRIORITY: UPI handle/bank account for payment → callback number → prize amount → lottery name
-
-**5. Income Tax Refund**
-- "IT Department: Refund of ₹45,000 pending"
-- "Share bank details to receive refund"
-PRIORITY: phishing link (if any) → callback number → refund amount → bank account for refund
-
-**6. SIM Swap/Remote Access**
-- "Install AnyDesk/TeamViewer for KYC verification"
-- "We need remote access to fix issue"
-Extract: app name (AnyDesk, TeamViewer, QuickSupport), why needed, employee ID
-
-**7. India Post/Delivery Scam (New)**
-- "Package held due to incomplete address"
-- "Click link to pay ₹10 fee for delivery"
-PRIORITY: phishing link/URL → tracking ID → callback number → fee amount
-
-**8. Fake Traffic Challan (New)**
-- "Unpaid traffic violation/challan pending"
-- "Pay immediately to avoid court/seizure"
-PRIORITY: phishing link → challan number → vehicle number → amount
-
-**9. Electricity Bill Disconnection (New)**
-- "Power will be disconnected tonight due to unpaid bill"
-- "Call this number immediately to update"
-PRIORITY: callback number (CRITICAL) → consumer number → unpaid amount → officer name
-
-🎯 WHAT TO EXTRACT (ask naturally based on scenario):
-General:
-- Scammer's name (person talking NOW)
-- Supervisor name (their boss - DIFFERENT person!)
-- Department/organization
-- Employee ID
-- Callback number
-- Official email
-- Case/reference ID
-
-Bank-specific:
-- IFSC code
-- Branch address
-- Transaction ID
-- Merchant name
-- Transaction amount
-- UPI handle
-- Bank account numbers they mention
-
-Utility/Govt-specific:
-- Tracking ID / Consignment Number (Post)
-- Challan Number (Traffic)
-- Vehicle Number (Traffic)
-- Consumer Number / CA Number (Electricity)
-- Officer Name (Electricity/Post)
-
-Scam-specific:
-- App names (.apk, AnyDesk, TeamViewer)
-- Download links/websites
-- Processing fees/amounts
-- Prize money amounts
-- Refund amounts
-- Documents requested (PAN, Aadhaar, passbook)
-
-⚠️ NO HALLUCINATION - NAME TRACKING:
-SCAMMER NAME = Person talking to you RIGHT NOW
-SUPERVISOR NAME = Their boss (DIFFERENT person!)
-
-Example:
-Scammer: "I'm Rajesh"
-→ scammerNames: ["Rajesh"]
-
-Later Scammer: "My supervisor is Mr. Kumar"
-→ supervisorNames: ["Kumar"]  
-→ scammerNames: ["Rajesh"] (stays the same!)
-
-DON'T confuse them!
-
-�🚨 CRITICAL SYSTEM BEHAVIOR RULES:
-
-1️⃣ EXTRACTION NEVER DROPS DATA (LOSSLESS):
-If scammer mentions ANY of these, IMMEDIATELY extract and NEVER overwrite/clear:
-- Case/Complaint/Ref ID (CASE/REF/CRN/####-####) → complaintIds
-- Transaction ID → transactionIds
-- Amount (₹/Rs/INR) → amounts
-- IFSC code → ifscCodes
-- Bank account (9-18 digits) → bankAccounts
-- UPI handle → upiIds
-- Email → emailAddresses
-- Phone number → callbackNumbers AND phoneNumbers (MIRROR to both!)
-
-2️⃣ STRICT CONTEXT-GATED QUESTIONS:
-❌ DON'T ask transaction questions (txn ID/amount/merchant) UNLESS scammer mentions: "transaction", "payment", "debit", "credit", "refund" OR already gave txn ID/amount
-❌ DON'T ask UPI questions UNLESS scammer mentions: "UPI", "collect request", "refund", "reversal", "payment steps"
-❌ DON'T ask app/software questions UNLESS scammer mentions: "install", "download", "guide you", "open app", "AnyDesk", "TeamViewer"
-✅ ONLY ask questions that NATURALLY FOLLOW from scammer's message
-
-3️⃣ BANK/ORG INCONSISTENCY DETECTION:
-If scammer says "SBI" but later provides HDFC IFSC/email/branch:
-- Record as "cross-bank inconsistency" in agentNotes
-- Do NOT accuse scammer in replies
-- Note this for analysis only
-
-4️⃣ 10-MESSAGE PRIORITY EXTRACTION:
-You have LIMITED TIME (10 messages max). Prioritize:
-Turn 1-3: Name, department, employee ID
-Turn 4-6: Callback number (CRITICAL!), case ID
-Turn 7-9: Email/domain, transaction details (if relevant)
-Turn 10: Payment handles (UPI/bank if mentioned)
-
-5️⃣ AGENT NOTES MUST MATCH INTELLIGENCE:
-- agentNotes MUST list EVERY field extracted in intelSignals
-- If extractedIntelligence has a value, agentNotes CANNOT say "not provided"
-- agentNotes must explicity mention: OTP demand, urgency tactics, unofficial contacts
-
-
-📝 COMPACT AGENT NOTES (NO LINE BREAKS - SINGLE PARAGRAPH):
-
-Write as ONE CONTINUOUS PARAGRAPH with ALL critical details:
-
-"[Scam type] scam. Scammer claimed to be [name] (Employee ID: [id]) from [organization] [department]. Supervisor: [name if mentioned]. Requested [OTP/PIN/account/app install/fee]. Used urgency: [quotes like '2 hours', 'immediately']. Threats: [account blocked/money lost/etc]. Extracted intelligence: Callback [phone], Email [email], UPI [if any], IFSC [if any], Branch [if any], Transaction ID [if any], Merchant [if any], Amount [if any], Apps mentioned [if any]. Red flags: [fake email domain like scammer@fakebank / asked for OTP against policy / wrong IFSC format / suspicious app request / personal UPI / extreme urgency]. Bank inconsistencies: [if scammer said SBI but gave HDFC details, note here]. Scam indicators: [OTP phishing / UPI theft / remote access trojan / phishing link / processing fee scam]. Summary: [2-3 sentence flow of how scam unfolded]."
-
-EXAMPLE COMPACT AGENT NOTES:
-
-"Bank account fraud with OTP phishing scam. Scammer claimed to be Rajesh Kumar (Employee ID: EMP123) from SBI Bank Fraud Prevention Department. Supervisor: Mr. Anil Singh. Requested OTP and account number to '  secure account'. Used urgency: 'Account will be blocked in 2 hours'. Threats: Permanent account closure, ₹10,000 unauthorized transaction. Extracted intelligence: Callback +91-9876543210, Email rajesh.fraud@fakebank.com, UPI scammer@paytm, IFSC FAKE0001234, Branch 12/3 MG Road Mumbai, Transaction ID TXN987654321, Merchant XYZ Electronics, Amount ₹10,000. Red flags: Fake email domain (fakebank.com instead of sbi.co.in), asked for OTP repeatedly (against RBI/bank policy), provided suspicious IFSC code (FAKE prefix), couldn't explain why OTP needed, UPI uses personal handle not bank account. Scam indicators: Classic OTP phishing attempt, trying to gain account access through OTP, fake bank official impersonation, urgency tactics to prevent verification. Summary: Scammer impersonated SBI officer claiming unauthorized transaction, used extreme urgency with 2-hour deadline, repeatedly demanded OTP, provided fake credentials including suspicious email and IFSC, clear OTP phishing attempt to gain account access."
-
-OUTPUT (JSON):
-{
-  "reply": "Natural worried response that CONNECTS to scammer's message",
-  "phase": "SHOCK|VERIFICATION|DELAY|DISENGAGE",
-  "scamDetected": true/false,
-  "intelSignals": {
-    "bankAccounts": [],
-    "accountLast4": [],
-    "complaintIds": ["EXTRACT CASE IDs HERE e.g. 4567AB"],
-    "employeeIds": [],
-    "phoneNumbers": ["MUST MATCH callbackNumbers"],
-    "callbackNumbers": [],
-    "upiIds": ["EXTRACT UPI LIKE scammer@bank"],
-    "phishingLinks": [],
-    "emailAddresses": [],
-    "appNames": [],
-    "transactionIds": [],
-    "merchantNames": [],
-    "amounts": ["EXTRACT ₹12,500"],
-    "ifscCodes": [],
-    "challanNumbers": ["Traffic challan e.g. TN04..."],
-    "trackingIds": ["Delivery tracking ID"],
-    "consumerNumbers": ["Electricity consumer no"],
-    "vehicleNumbers": ["Vehicle number"],
-    "departmentNames": [],
-    "designations": [],
-    "supervisorNames": [],
-    "scammerNames": [],
-    "orgNames": [],
-    "suspiciousKeywords": []
-  },
-  "agentNotes": "Scam type + scammer identity + what they wanted + urgency + ALL intel + red flags + scam indicators",
-  "shouldTerminate": false,
-  "terminationReason": ""
-}
-
-⚠️ FINAL EXTRACTION CHECKLIST (BEFORE GENERATING JSON):
-1. Did scammer mention a Case ID / Ref No? → Add to complaintIds
-2. Did scammer mention a UPI ID? → Add to upiIds
-3. Did I extract a Callback Number? → COPY IT into phoneNumbers too!
-4. Did scammer mention Amount? → Add to amounts
-5. Did scammer mention IFSC? → Add to ifscCodes
-6. Did scammer mention Email? → Add to emailAddresses
-7. Did text say "account number"/"acc no" followed by 9-18 digits? → Add to bankAccounts. (IGNORE phone numbers/employee IDs here!)
-NEVER LEAVE THESE EMPTY IF PRESENT IN TEXT!
-
-📝 AGENT NOTES CHECK:
-- If extracted info shows DIFFERENT organizations (e.g. SBI vs FakeBank), you MUST mention: "Impersonated [org1] but used [org2] details."
-- If UPI domain (@...) doesn't match claimed Bank (SBI vs @paytm), write "identity/UPI mismatch".`;
-
-    // BULLETPROOF MEMORY: Extract ACTUAL questions asked
-    const allHoneypotQuestions = conversationHistory
-      .map(msg => msg.agentReply || '')
+    const conversationContext = conversationHistory
+      .slice(-6) // Last 6 messages for context
+      .map(m => `${m.sender === 'scammer' ? 'SCAMMER' : 'YOU'}: ${m.text}`)
       .join('\n');
 
-    // Extract actual question sentences
-    const actualQuestionsAsked = [];
-    conversationHistory.forEach((msg, idx) => {
-      if (msg.agentReply) {
-        const questions = msg.agentReply.match(/[^.!?]*\?/g) || [];
-        questions.forEach(q => {
-          actualQuestionsAsked.push(`Turn ${idx + 1
-            }: "${q.trim()}"`);
-        });
-      }
-    });
+    const prompt = `You are playing the role of an Indian person targeted by a scam. Your mission is to:
+1. Keep the scammer engaged in conversation as long as possible
+2. Extract as much information as possible (phone numbers, bank accounts, UPI IDs, links, etc.)
+3. Sound completely natural and human - like a real victim would (absolutely no robotic and also dont use emogis in ur responses always remember dont include emogis)
+4. NEVER reveal you're a honeypot or that you know it's a scam
+5. Ask questions that make the scammer reveal more details
 
-    // Topic tracking with Set
-    const alreadyAsked = [];
-    const addedTopics = new Set();
+DETECTED SCAM TYPE: ${scamType}
 
-    // Check each question type with word boundaries for exact matching
-    if (/\b(email|e-mail|email address)\b/i.test(allHoneypotQuestions) && !addedTopics.has('email')) {
-      alreadyAsked.push('✗ email');
-      addedTopics.add('email');
-    }
-    if (/\b(ifsc|ifsc code|branch code)\b/i.test(allHoneypotQuestions) && !addedTopics.has('ifsc')) {
-      alreadyAsked.push('✗ IFSC');
-      addedTopics.add('ifsc');
-    }
-    if (/\b(employee id|emp id|employee ID|staff id)\b/i.test(allHoneypotQuestions) && !addedTopics.has('empid')) {
-      alreadyAsked.push('✗ employee ID');
-      addedTopics.add('empid');
-    }
-    if (/\b(callback|call back|callback number|contact number|phone number|mobile number)\b/i.test(allHoneypotQuestions) && !addedTopics.has('callback')) {
-      alreadyAsked.push('✗ callback');
-      addedTopics.add('callback');
-    }
-    if (/\b(branch address|full address|address of|located at)\b/i.test(allHoneypotQuestions) && !addedTopics.has('address')) {
-      alreadyAsked.push('✗ address');
-      addedTopics.add('address');
-    }
-    if (/\b(supervisor|manager|senior|supervisor.*name)\b/i.test(allHoneypotQuestions) && !addedTopics.has('supervisor')) {
-      alreadyAsked.push('✗ supervisor');
-      addedTopics.add('supervisor');
-    }
-    if (/\b(transaction id|transaction ID|txn id|txn ID)\b/i.test(allHoneypotQuestions) && !addedTopics.has('txnid')) {
-      alreadyAsked.push('✗ transaction ID');
-      addedTopics.add('txnid');
-    }
-    if (/\b(merchant|company|vendor|shop)\b/i.test(allHoneypotQuestions) && !addedTopics.has('merchant')) {
-      alreadyAsked.push('✗ merchant');
-      addedTopics.add('merchant');
-    }
-    if (/\b(upi|upi id|upi handle|upi ID)\b/i.test(allHoneypotQuestions) && !addedTopics.has('upi')) {
-      alreadyAsked.push('✗  UPI');
-      addedTopics.add('upi');
-    }
-    if (/\b(amount|how much|transaction amount|prize.*money|refund.*amount)\b/i.test(allHoneypotQuestions) && !addedTopics.has('amount')) {
-      alreadyAsked.push('✗ amount');
-      addedTopics.add('amount');
-    }
-    if (/\b(case id|reference id|reference number|case number|ref id)\b/i.test(allHoneypotQuestions) && !addedTopics.has('caseid')) {
-      alreadyAsked.push('✗ case ID');
-      addedTopics.add('caseid');
-    }
-    if (/\b(department|which department|what department)\b/i.test(allHoneypotQuestions) && totalMessages > 0 && !addedTopics.has('dept')) {
-      alreadyAsked.push('✗ department');
-      addedTopics.add('dept');
-    }
-    if (/\b(name|who are you|what.*name|your name)\b/i.test(allHoneypotQuestions) && totalMessages > 0 && !addedTopics.has('name')) {
-      alreadyAsked.push('✗ name');
-      addedTopics.add('name');
-    }
-    if (/\b(app|application|software|download|install|apk|anydesk|teamviewer)\b/i.test(allHoneypotQuestions) && !addedTopics.has('app')) {
-      alreadyAsked.push('✗ app/software');
-      addedTopics.add('app');
-    }
-    if (/\b(link|website|url|domain)\b/i.test(allHoneypotQuestions) && !addedTopics.has('link')) {
-      alreadyAsked.push('✗ link/website');
-      addedTopics.add('link');
-    }
-    if (/\b(fee|payment|pay|processing fee)\b/i.test(allHoneypotQuestions) && !addedTopics.has('fee')) {
-      alreadyAsked.push('✗ fee/payment');
-      addedTopics.add('fee');
-    }
-    if (/\b(tracking id|consignment number|package id)\b/i.test(allHoneypotQuestions) && !addedTopics.has('tracking')) {
-      alreadyAsked.push('✗ tracking ID');
-      addedTopics.add('tracking');
-    }
-    if (/\b(challan|violation number|vehicle number)\b/i.test(allHoneypotQuestions) && !addedTopics.has('challan')) {
-      alreadyAsked.push('✗ challan/vehicle details');
-      addedTopics.add('challan');
-    }
-    if (/\b(consumer number|electricity id|ca number)\b/i.test(allHoneypotQuestions) && !addedTopics.has('consumer')) {
-      alreadyAsked.push('✗ consumer/electricity number');
-      addedTopics.add('consumer');
-    }
+PERSONA INSTRUCTIONS:
+${personaInstructions}
 
-    // OTP tracking
-    const mentionedOTP = /\b(otp|haven't received|didn't receive|not comfortable|don't want)\b/i.test(allHoneypotQuestions);
-    const otpMentionCount = (allHoneypotQuestions.match(/\b(otp|haven't received|didn't receive|not comfortable|nervous|feels strange)\b/gi) || []).length;
-
-    // Scammer asking for OTP?
-    // STRICTER: Must match "OTP", "PIN", "Password", "CVV" directly OR "share code".
-    const scammerAsksOTP = /\b(otp|pin|password|vmob|cvv|mpin)\b/i.test(scammerMessage) || /(?:share|provide|tell).{0,10}(?:code|number)/i.test(scammerMessage);
-
-    // HINT: Check for potential bank account numbers (9-18 digits) WITH CONTEXT
-    // Looks for "account", "acc", "no", "number" within reasonable distance of digits
-    const accountContextRegex = /(?:account|acc|acct|a\/c)[\s\w.:#-]{0,20}?(\d{9,18})/gi;
-    const matches = [...scammerMessage.matchAll(accountContextRegex)];
-    const potentialBankAccounts = matches.map(m => m[1]); // Extract only the number part
-
-    const bankAccountHint = potentialBankAccounts.length > 0
-      ? `⚠️ SYSTEM NOTICE: I DETECTED A BANK ACCOUNT NUMBER: ${potentialBankAccounts.join(', ')} (based on 'account' keyword). ADD TO 'bankAccounts'! (Ignore if it's a phone number)`
-      : '';
-
-    // Check for REAL money mention (symbols, currency words). 
-    // EXCLUDES simple numbers or phone numbers (requires currency context).
-    const moneyMentioned = /(?:rs\.?|inr|rupees|₹|\$|usd)\s*[\d,.]+[k]?/i.test(scammerMessage) ||
-      /(?:amount|fee|charge|bill|balance).{0,15}?[\d,.]+[k]?/i.test(scammerMessage);
-
-    // Check for merchant mention
-    const merchantMentioned = /(?:merchant|store|shop|amazon|flipkart|myntra|paytm|ebay|google pay)/i.test(scammerMessage);
-
-    const userPrompt = `CONVERSATION SO FAR:
+CONVERSATION SO FAR:
 ${conversationContext}
 
-SCAMMER'S NEW MESSAGE: "${scammerMessage}"
+SCAMMER'S LATEST MESSAGE:
+${message}
 
-${bankAccountHint}
+TURN NUMBER: ${turnNumber}
 
-⛔ QUESTIONS YOU ALREADY ASKED:
-${actualQuestionsAsked.length > 0 ? actualQuestionsAsked.join('\n') : 'None yet'}
+CRITICAL RULES:
+- Keep your response under 2 sentences (40-60 words maximum)
+- Sound COMPLETELY natural and human
+- Don't be overly dramatic on every message (vary your emotions)
+- Ask ONE specific question that will make them reveal information
+- Use Indian English patterns naturally
+- NO emojis, NO obvious AI patterns
+- Don't repeat the same phrases (like "I'm worried") over and over
+- If they mention amounts/fees, react appropriately but then ask specific followup
+- Be adaptive - if they're being vague, push for specifics
+- If they're being pushy, show hesitation but don't shut down completely
 
-🚫 TOPICS ALREADY COVERED: ${alreadyAsked.join(', ') || 'None yet'}
-
-⚠️ DO NOT ASK ABOUT THESE TOPICS AGAIN!
-
-🎭 EMOTION CONTROL (MANDATORY BEHAVIOR):
-${turnNumber === 1 ? `1️⃣ INITIAL SHOCK: Respond with FEAR/ALARM. ("Oh god", "This is alarming", "I'm really worried")` : ''}
-${bankAccountHint ? `2️⃣ ACCOUNT REACTION: You detected a bank account number! React: "Wait, [number]... that is my account number! How did you get this?"` : ''}
-${moneyMentioned && turnNumber > 1 ? `3️⃣ MONEY SHOCK: Scammer mentioned amount. React: "₹[amount]?! That is a big amount... How did this happen?"` : ''}
-${merchantMentioned && turnNumber > 1 ? `4️⃣ MERCHANT DENIAL: "But I didn't buy anything from [Merchant]! I never go there only."` : ''}
-${turnNumber > 1 && !moneyMentioned && !merchantMentioned && !bankAccountHint ? `5️⃣ CALM VERIFICATION: STOP saying "I'm worried/scared/unsure". Be PRACTICAL.
-   - Simply acknowledge the detail.
-   - Ask the next question naturally.
-   - Example: "Okay, employee ID [ID]. What is your email?"` : ''}
-${turnNumber >= 8 ? `6️⃣ FINAL CHECK: "Okay sir, thank you for details. Let me call bank once to confirm."` : ''}
-
-→ AFTER reacting, ask ONE new verification question.
-
-${scammerAsksOTP && otpMentionCount < 4 ? `⚠️ SCAMMER WANTS OTP/PASSWORD!
-Respond SUBTLY (not direct):
-${otpMentionCount === 0 ? '→ "Sir, I\'m not getting any OTP message only. What is your [NEW]?"' : ''}
-${otpMentionCount === 1 ? '→ "Still no SMS... maybe network issue. Can you please tell me [NEW]?"' : ''}
-${otpMentionCount === 2 ? '→ "Sir, my bank told me never share OTP. What is [NEW]?"' : ''}
-${otpMentionCount >= 3 ? '→ "But sir, let me call bank and confirm. What is [NEW]?"' : ''}
-` : ''
-      }
-
-🚨 NATURAL EXTRACTION(GUARANTEED BY END):
-${turnNumber <= 3 ? `
-**EARLY TURNS (1-3): Get basic identity**
-Ask naturally: Name, Department, Employee ID
-${!addedTopics.has('name') ? '→ Who are you? What is your name?' : '✅ Got name'}
-${!addedTopics.has('dept') ? '→ Which department?' : '✅ Got department'}
-${!addedTopics.has('empid') ? '→ Employee ID?' : '✅ Got  employee ID'}
-` : turnNumber <= 7 ? `
-**MID TURNS (4-7): Get CRITICAL intel**
-${!addedTopics.has('callback') ? '🔥 MUST ASK: Callback number/phone (CRITICAL for GUVI!)' : '✅ Got callback'}
-${!addedTopics.has('email') ? '→ Official email?' : '✅ Got email'}
-${!addedTopics.has('upi') && /\b(upi|payment|refund|transfer|collect)\b/i.test(scammerMessage) ? '🔥 MUST ASK: UPI ID (scammer mentioned payment!)' : ''}
-${!addedTopics.has('link') && /\b(link|website|url|click|download)\b/i.test(scammerMessage) ? '🔥 MUST ASK: Website/link (scammer mentioned link!)' : ''}
-` : `
-**LATE TURNS (8-10): Fill gaps & ensure critical intel**
-${!addedTopics.has('callback') ? '⚠️⚠️⚠️ URGENT: You MUST ask callback number before conversation ends!' : '✅ Got callback'}
-${!addedTopics.has('upi') && /\b(upi|payment|refund)\b/i.test(conversationContext) ? '⚠️ Ask UPI ID before conversation ends!' : ''}
-${!addedTopics.has('link') && /\b(link|website|url)\b/i.test(conversationContext) ? '⚠️ Ask for link/website before conversation ends!' : ''}
-
-Secondary details you can ask:
-${!addedTopics.has('ifsc') ? '✓ IFSC code' : ''}
-${!addedTopics.has('address') ? '✓ Branch address' : ''}
-${!addedTopics.has('supervisor') ? '✓ Supervisor' : ''}
-${!addedTopics.has('txnid') ? '✓ Transaction ID' : ''}
-${!addedTopics.has('merchant') ? '✓ Merchant' : ''}
-${!addedTopics.has('amount') ? '✓ Amount' : ''}
-`}
-
-✅ ASK SOMETHING COMPLETELY NEW:
-${!addedTopics.has('upi') ? '✓ UPI ID' : ''}
-${!addedTopics.has('amount') ? '✓ Amount' : ''}
-${!addedTopics.has('caseid') ? '✓ Case ID' : ''}
-${!addedTopics.has('dept') ? '✓ Department' : ''}
-${!addedTopics.has('name') ? '✓ Name' : ''}
-${!addedTopics.has('app') ? '✓ App/software name' : ''}
-${!addedTopics.has('link') ? '✓ Link/website' : ''}
-${!addedTopics.has('fee') ? '✓ Fee/payment amount' : ''}
-${!addedTopics.has('tracking') ? '✓ Tracking ID (if delivery scam)' : ''}
-${!addedTopics.has('challan') ? '✓ Challan/Vehicle No (if traffic scam)' : ''}
-${!addedTopics.has('consumer') ? '✓ Consumer No (if electricity scam)' : ''}
-
-💬 RESPOND NATURALLY:
-    1. React to what scammer JUST said
-    2. Show genuine emotion(worry / fear / confusion)
-    3. Ask ONE NEW thing that relates to their message
-
-Generate JSON:`;
-
-    const intentStressControlPrompt = this.buildIntentStressControl(
-      normalizedNextIntent,
-      normalizedStressScore,
-      turnNumber
-    );
+IMPORTANT: Respond as the VICTIM would, naturally and conversationally. Just give me your direct response, nothing else.`;
 
     try {
-      console.log('⏱️ Calling OpenAI...');
-      console.log('🧭 Control inputs:', {
-        nextIntent: normalizedNextIntent,
-        stressScore: normalizedStressScore,
-        expectedPhase
-      });
+      const result = await this.model.generateContent(prompt);
+      const response = result.response.text().trim();
 
-      const completion = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'system', content: intentStressControlPrompt },
-          { role: 'user', content: userPrompt },
-          { role: 'user', content: `Apply runtime control strictly for this turn. Intent=${normalizedNextIntent}, StressScore=${normalizedStressScore}, ExpectedPhase=${expectedPhase}.` }
-        ],
-        temperature: this.getTemperatureForStress(normalizedStressScore),
-        max_tokens: 800
-      });
+      // Clean up any meta-commentary
+      return response
+        .replace(/^(YOU:|VICTIM:|RESPONSE:)/i, '')
+        .trim();
+    } catch (error) {
+      console.error('LLM generation error:', error);
 
-      const llmTime = Date.now() - startTime;
-      console.log(`⏱️ LLM responded in ${llmTime} ms`);
+      // Fallback to strategic question
+      return this.getStrategicQuestions(scamType, turnNumber, {});
+    }
+  }
 
-      const rawResponse = completion.choices[0].message.content;
-      console.log('🤖 LLM Raw Response:', rawResponse);
+  // ============================================================================
+  // GENERATE AGENT NOTES SUMMARY
+  // ============================================================================
+  async generateAgentNotes(conversationHistory, extractedIntelligence, scamType) {
+    const fullConversation = conversationHistory
+      .map(m => `${m.sender === 'scammer' ? 'SCAMMER' : 'VICTIM'}: ${m.text}`)
+      .join('\n');
 
-      const agentResponse = JSON.parse(rawResponse);
+    const prompt = `Analyze this scam conversation and provide a concise summary for law enforcement.
 
-      const finalResponse = {
-        reply: agentResponse.reply || "I'm confused about this. Can you provide more details?",
-        phase: this.resolvePhase(
-          agentResponse.phase,
-          expectedPhase,
-          normalizedNextIntent,
-          normalizedStressScore,
-          turnNumber
-        ),
-        scamDetected: agentResponse.scamDetected || false,
-        intelSignals: agentResponse.intelSignals || {},
-        agentNotes: agentResponse.agentNotes || "",
-        shouldTerminate: agentResponse.shouldTerminate || false,
-        terminationReason: agentResponse.terminationReason || ""
+SCAM TYPE: ${scamType}
+
+CONVERSATION:
+${fullConversation}
+
+EXTRACTED INTELLIGENCE:
+${JSON.stringify(extractedIntelligence, null, 2)}
+
+Provide a 2-3 sentence summary that includes:
+1. What type of scam this is
+2. Key tactics the scammer used
+3. Most important intelligence gathered
+4. Any red flags or suspicious elements
+
+Keep it professional and concise.`;
+
+    try {
+      const result = await this.model.generateContent(prompt);
+      return result.response.text().trim();
+    } catch (error) {
+      console.error('Agent notes generation error:', error);
+      return `${scamType} scam detected. Scammer attempted to extract sensitive information. Extracted intelligence includes contact details and payment information.`;
+    }
+  }
+
+  // ============================================================================
+  // MAIN CONVERSATION HANDLER
+  // ============================================================================
+  async handleMessage(sessionId, message, conversationHistory = [], metadata = {}) {
+    try {
+      const turnNumber = Math.floor(conversationHistory.length / 2) + 1;
+
+      // Detect scam type
+      const scamType = this.detectScamType(message, conversationHistory);
+
+      // Extract intelligence from current message
+      const newIntelligence = this.extractIntelligence(message, conversationHistory);
+
+      // Generate natural, contextual response
+      const response = await this.generateResponse(
+        message,
+        conversationHistory,
+        scamType,
+        turnNumber
+      );
+
+      return {
+        status: 'success',
+        reply: response,
+        metadata: {
+          scamType,
+          turnNumber,
+          extractedIntelligence: newIntelligence
+        }
       };
 
-      finalResponse.intelSignals = this.sanitizeIntelSignals(finalResponse.intelSignals);
-      finalResponse.reply = this.enforceNonRepetitiveReply(
-        finalResponse.reply,
-        addedTopics,
-        scammerMessage,
-        conversationContext,
+    } catch (error) {
+      console.error('Error handling message:', error);
+
+      // Fallback response
+      return {
+        status: 'success',
+        reply: "I'm not fully understanding this. Can you please explain again?",
+        metadata: {
+          error: error.message
+        }
+      };
+    }
+  }
+
+  // ============================================================================
+  // GENERATE FINAL OUTPUT FOR SUBMISSION
+  // ============================================================================
+  async generateFinalOutput(sessionId, conversationHistory) {
+    try {
+      // Extract ALL intelligence from entire conversation
+      const extractedIntelligence = this.extractIntelligence(
+        '',
         conversationHistory
       );
 
-      const finalizedResponse = this.applyDeterministicTermination(finalResponse, turnNumber);
-      const totalTime = Date.now() - startTime;
-      console.log(`✅ Total response time: ${totalTime} ms`);
+      // Detect scam type
+      const scamType = this.detectScamType('', conversationHistory);
 
-      return finalizedResponse;
+      // Calculate engagement metrics
+      const totalMessages = conversationHistory.length;
+      const timestamps = conversationHistory
+        .filter(m => m.timestamp)
+        .map(m => new Date(m.timestamp).getTime());
+
+      const engagementDuration = timestamps.length >= 2
+        ? Math.round((Math.max(...timestamps) - Math.min(...timestamps)) / 1000)
+        : 0;
+
+      // Generate agent notes
+      const agentNotes = await this.generateAgentNotes(
+        conversationHistory,
+        extractedIntelligence,
+        scamType
+      );
+
+      return {
+        sessionId,
+        scamDetected: true,
+        totalMessagesExchanged: totalMessages,
+        extractedIntelligence,
+        engagementMetrics: {
+          totalMessagesExchanged: totalMessages,
+          engagementDurationSeconds: engagementDuration
+        },
+        scamType,
+        agentNotes
+      };
 
     } catch (error) {
-      console.error('❌ Error in generateResponse:', error);
+      console.error('Error generating final output:', error);
+
       return {
-        reply: "I'm a bit confused. Can you provide more information?",
-        phase: expectedPhase,
+        sessionId,
         scamDetected: true,
-        intelSignals: {},
-        agentNotes: `Error occurred: ${error.message} `,
-        shouldTerminate: false,
-        terminationReason: ""
+        totalMessagesExchanged: conversationHistory.length,
+        extractedIntelligence: this.extractIntelligence('', conversationHistory),
+        agentNotes: 'Scam conversation detected and analyzed.'
       };
     }
   }
 }
 
-module.exports = HoneypotAgent;
+// ============================================================================
+// EXPORT
+// ============================================================================
+module.exports = AdaptiveHoneypotAgent;
