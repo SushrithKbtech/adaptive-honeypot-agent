@@ -202,7 +202,19 @@ Each scam type has targeted intelligence goals:
 5. ✅ Enhanced `handleMessage()` - Combines regex + LLM extraction
 6. ✅ Kept `generateAgentNotes()` - Already LLM-powered
 
-**Total: +181 lines of intelligent code!** 📝
+### **5. High-Value Intelligence Prioritization** ✅ (NEW)
+- **Problem**: Bot was asking generic questions ("Where is MG Road?") instead of getting critical data.
+- **Solution**: Dynamic prioritization engine.
+- **How It Works**:
+  1. Bot checks what intel is MISSING (Phone, UPI, Bank, Employee ID).
+  2. If missing, it **ignores** low-value questions.
+  3. It **aggressively** asks for the missing high-value item using natural language.
+  
+**Example:**
+- *Before*: "Okay MG Road. What time was the violation?" (Low value)
+- *After*: "MG Road okay. But I need your **Phone Number** to discuss this urgency." (CRITICAL value)
+
+**Total: +247 lines of intelligent code!** 📝
 
 ---
 
@@ -273,7 +285,8 @@ Your honeypot AI now:
 4. ✅ **Writes professional notes** - LLM-generated summaries
 5. ✅ **Never repeats questions** - Smart tracking
 6. ✅ **Detects scam types accurately** - 8 different types
-7. ✅ **Adapts to conversation** - Context-aware responses
+7. ✅ **Prioritizes Critical Intel** - Phone/Bank/ID hunting
+8. ✅ **Adapts to conversation** - Context-aware responses
 
 **Your AI is now a professional scam intelligence agent!** 🕵️‍♂️
 
