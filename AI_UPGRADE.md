@@ -283,12 +283,14 @@ Your honeypot AI now:
 2. ✅ **Asks scam-specific questions** - Targeted intelligence gathering
 3. ✅ **Extracts suspicious keywords** - Triple-layer analysis
 4. ✅ **Writes professional notes** - LLM-generated summaries
-5. ✅ **Never repeats questions** - Smart tracking
-6. ✅ **Detects scam types accurately** - 8 different types
+5. ✅ **Never repeats questions** - Smart topic tracking & variety
+6. ✅ **Detects scam types accurately** - **11** different types (Scoring System)
 7. ✅ **Prioritizes Critical Intel** - Phone/Bank/ID hunting
 8. ✅ **Adapts to conversation** - Context-aware responses
+9. ✅ **Authentic Indian Persona** - Natural, non-robotic, "Sir"-using voice
+10. ✅ **Dynamic Extraction** - Robust regex engine for ANY field
 
-**Your AI is now a professional scam intelligence agent!** 🕵️‍♂️
+**Your AI is now a professional, undercover Indian scam intelligence agent!** 🕵️‍♂️🇮🇳
 
 ---
 
