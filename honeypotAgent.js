@@ -500,7 +500,39 @@ Keywords:`;
   // ============================================================================
   // GET SCAM-SPECIFIC QUESTIONING STRATEGY
   // ============================================================================
-  getScamSpecificQuestions(scamType, turnNumber) {
+  getScamSpecificQuestions(scamType, turnNumber, extractedIntelligence = {}) {
+
+    // 1. IDENTIFY MISSING HIGH-VALUE INTELLIGENCE
+    const missing = [];
+
+    // PHONE NUMBER (Critical)
+    if (!extractedIntelligence.phoneNumbers || extractedIntelligence.phoneNumbers.length === 0) {
+      missing.push("PHONE NUMBER (Ask for callback number/WhatsApp)");
+    }
+
+    // PAYMENT DETAILS (Critical)
+    if ((!extractedIntelligence.upiIds || extractedIntelligence.upiIds.length === 0) &&
+      (!extractedIntelligence.bankAccounts || extractedIntelligence.bankAccounts.length === 0)) {
+      missing.push("PAYMENT DETAILS (Ask for UPI ID/Bank Account/Payment Link)");
+    }
+
+    // EMPLOYEE ID (High)
+    if (!extractedIntelligence.employeeIds || extractedIntelligence.employeeIds.length === 0) {
+      missing.push("EMPLOYEE ID / BADGE NUMBER");
+    }
+
+    // ORGANIZATION (Medium)
+    if (!extractedIntelligence.orgNames || extractedIntelligence.orgNames.length === 0) {
+      missing.push("EXACT DEPARTMENT / OFFICE NAME");
+    }
+
+    // 2. CONSTRUCT DYNAMIC STRATEGY
+    let priorityPrompt = "";
+    if (missing.length > 0) {
+      priorityPrompt = `\n\n🚨 MISSING HIGH-VALUE INTEL (PRIORITIZE THESE):\n${missing.map(m => `- ${m}`).join('\n')}\n`;
+    }
+
+    // 3. BASE STRATEGIES
     const strategies = {
       lottery_prize: `Target: Prize claim process, org name, employee details, payment methods
 - Who is organizing this lottery?
@@ -574,13 +606,14 @@ Keywords:`;
 - Can I get documentation?`
     };
 
-    return strategies[scamType] || strategies.bank_fraud;
+    const baseStrategy = strategies[scamType] || strategies.bank_fraud;
+    return priorityPrompt + "\n" + baseStrategy;
   }
 
   // ============================================================================
   // GENERATE CONTEXTUAL, NATURAL RESPONSE
   // ============================================================================
-  async generateResponse(message, conversationHistory, scamType, turnNumber, askedQuestions = []) {
+  async generateResponse(message, conversationHistory, scamType, turnNumber, askedQuestions = [], extractedIntelligence = {}) {
     const persona = this.scamPatterns[scamType]?.persona || 'concerned_practical';
     const personaInstructions = this.getPersonaInstructions(persona, scamType, turnNumber);
 
@@ -596,7 +629,7 @@ Keywords:`;
       : '';
 
     // Get scam-specific questioning strategy
-    const questioningStrategy = this.getScamSpecificQuestions(scamType, turnNumber);
+    const questioningStrategy = this.getScamSpecificQuestions(scamType, turnNumber, extractedIntelligence);
 
     const prompt = `You are a real Indian person chatting/texting. Sound natural like WhatsApp/SMS conversation.
 
@@ -611,16 +644,34 @@ YOUR STATE: ${personaInstructions}
 
 WHAT TO EXTRACT: ${questioningStrategy}${previouslyAsked}
 
+PRIMARY MISSION - EXTRACT INTELLIGENCE:
+🎯 Your #1 JOB is to get scammer details:
+1. Phone/WhatsApp number (CRITICAL - always ask!)
+2. Employee ID / Badge number
+3. Organization/Department name
+4. Transaction/Challan/Tracking IDs
+5. Payment links / UPI IDs
+6. Amounts / Account numbers
+7. Names, locations, any identifying info
+
+IF they haven't given you a detail yet, ASK FOR IT!
+Examples:
+  - No phone number yet? → "Give me your number to call back"
+  - No employee ID? → "What's your employee ID?"
+  - No specific dept? → "Which office/branch/department?"
+
+BALANCE: Sound natural BUT prioritize getting ALL the intelligence!
 
 HOW TO RESPOND NATURALLY:
 
-    1. FIRST - Respond TO what they just said
-      - Acknowledge it / React to it / Reference it
-        - Don't ignore what they told you
+1. FIRST - Respond TO what they just said
+   - Acknowledge it / React to it / Reference it
+   - Don't ignore what they told you
 
-2. THEN - Ask your question naturally
-  - Slip it in as part of the conversation
-    - Not as a separate interrogation
+2. THEN - Ask for MISSING intelligence naturally
+   - Check what you haven't extracted yet
+   - Ask for it as part of the conversation
+   - Not as interrogation, but natural followup
 
 3. VARY YOUR STRUCTURE:
    ✅ Sometimes short: "Okay which branch?"
@@ -689,11 +740,11 @@ Turn 8: "Can't share? Then at least the refund date"
 Turn 9: "By Friday. How will I receive it?"
 Turn 10: "Bank transfer. Let me check with my CA first"
 
-See? NO phrase repeats! Every turn is completely unique!
+See? NO phrase repeats! Every turn extracts NEW intelligence! Phone# asked early!
 
-TURN ${turnNumber} - What would you text? Make it UNIQUE!
+TURN ${turnNumber} - Text naturally BUT extract missing intelligence (especially phone!)
 
-Your message (20-40 words, natural, NO REPETITION):`;
+Your message (20-40 words, natural, EXTRACT INTEL):`;
 
 
     try {
@@ -805,7 +856,8 @@ Keep it professional and concise.`;
         conversationHistory,
         scamType,
         turnNumber,
-        askedQuestions
+        askedQuestions,
+        newIntelligence // Pass extracted intelligence for prioritization
       );
 
       return {
