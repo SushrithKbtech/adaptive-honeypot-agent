@@ -243,8 +243,21 @@ const GUVI_CALLBACK_URL = 'https://guvi-honeypot-tester.onrender.com/callback';
 // ============================================================================
 // HELPER: SEND CALLBACK TO GUVI
 // ============================================================================
-async function sendGuviCallback(sessionData) {
+async function sendGuviCallback(sessionData, conversationHistory) {
     try {
+        // Generate LLM-powered agent notes
+        let agentNotes;
+        try {
+            agentNotes = await honeypotAgent.generateAgentNotes(
+                conversationHistory,
+                sessionData.extractedIntelligence,
+                sessionData.scamType
+            );
+        } catch (error) {
+            console.error('Error generating agent notes:', error);
+            agentNotes = `${sessionData.scamType} scam detected. Engaged for ${sessionData.turnCount} turns. Extracted intelligence successfully.`;
+        }
+
         // Build payload per GUVI spec
         const payload = {
             sessionId: sessionData.sessionId,
@@ -257,7 +270,7 @@ async function sendGuviCallback(sessionData) {
                 phoneNumbers: sessionData.extractedIntelligence.phoneNumbers || [],
                 suspiciousKeywords: sessionData.extractedIntelligence.suspiciousKeywords || []
             },
-            agentNotes: `${sessionData.scamType} scam detected. Engaged for ${sessionData.turnCount} turns. Extracted intelligence across multiple categories.`
+            agentNotes: agentNotes
         };
 
         console.log(`📤 Sending final callback to GUVI...`);
@@ -423,8 +436,8 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
         if (shouldTerminate) {
             console.log(`\n🏁 Session ${sessionId} terminating at turn ${session.turnCount}`);
 
-            // Send mandatory GUVI callback
-            await sendGuviCallback(session);
+            // Send mandatory GUVI callback with LLM-generated notes
+            await sendGuviCallback(session, agentHistory);
 
             // Add termination flag to response
             responsePayload.terminated = true;
