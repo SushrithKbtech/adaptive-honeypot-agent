@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OpenAI = require('openai');
 
 // ============================================================================
 // ADAPTIVE HONEYPOT AGENT - INTELLIGENT SCAM DETECTION & ENGAGEMENT
@@ -9,16 +9,10 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 class AdaptiveHoneypotAgent {
   constructor(apiKey) {
-    this.genAI = new GoogleGenerativeAI(apiKey);
-    this.model = this.genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash-exp',
-      generationConfig: {
-        temperature: 0.85,
-        topP: 0.95,
-        topK: 40,
-        maxOutputTokens: 500,
-      }
+    this.openai = new OpenAI({
+      apiKey: apiKey
     });
+    this.model = 'gpt-4o-mini'; // Fast, efficient, cost-effective
 
     // Scam type detection patterns
     this.scamPatterns = {
@@ -86,14 +80,14 @@ class AdaptiveHoneypotAgent {
       ],
       trackingIds: [
         /\b[A-Z]{2}\d{9,12}[A-Z]?\b/g,
-        /tracking[:\s]+([A-Z0-9]{8,})/gi
+        /tracking[\s:]+([A-Z0-9]{8,})/gi
       ],
       challanNumbers: [
-        /challan[:\s#]+([A-Z0-9]{8,})/gi,
+        /challan[\s#:]+([A-Z0-9]{8,})/gi,
         /\b[A-Z]{2}\d{8,12}\b/g
       ],
       consumerNumbers: [
-        /consumer[:\s#]+(\d{8,})/gi,
+        /consumer[\s#:]+(\d{8,})/gi,
         /\b\d{10,14}\b/g
       ],
       vehicleNumbers: [
@@ -364,7 +358,7 @@ class AdaptiveHoneypotAgent {
     }
 
     // Extract supervisor/manager names
-    const supervisorPattern = /(?:supervisor|manager|senior|officer|sir|madam)[:\s]+(?:mr|ms|mrs)?\.?\s?([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/gi;
+    const supervisorPattern = /(?:supervisor|manager|senior|officer|sir|madam)[\s:]+(?:mr|ms|mrs)?\.?\s?([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/gi;
     const supervisorMatches = [...allText.matchAll(supervisorPattern)];
     if (supervisorMatches.length > 0) {
       intelligence.supervisorNames = [...new Set(supervisorMatches.map(m => m[1].trim()))];
@@ -443,8 +437,23 @@ CRITICAL RULES:
 IMPORTANT: Respond as the VICTIM would, naturally and conversationally. Just give me your direct response, nothing else.`;
 
     try {
-      const result = await this.model.generateContent(prompt);
-      const response = result.response.text().trim();
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant playing the role of an Indian scam victim to gather intelligence from scammers.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.85,
+        max_tokens: 150
+      });
+
+      const response = completion.choices[0].message.content.trim();
 
       // Clean up any meta-commentary
       return response
@@ -485,8 +494,23 @@ Provide a 2-3 sentence summary that includes:
 Keep it professional and concise.`;
 
     try {
-      const result = await this.model.generateContent(prompt);
-      return result.response.text().trim();
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert in analyzing scam conversations for law enforcement.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 200
+      });
+
+      return completion.choices[0].message.content.trim();
     } catch (error) {
       console.error('Agent notes generation error:', error);
       return `${scamType} scam detected. Scammer attempted to extract sensitive information. Extracted intelligence includes contact details and payment information.`;

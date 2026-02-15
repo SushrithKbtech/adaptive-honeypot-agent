@@ -14,10 +14,10 @@ const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 const DB_NAME = process.env.DB_NAME || 'honeypot';
 const API_KEY = process.env.API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-if (!GEMINI_API_KEY) {
-    console.error('❌ ERROR: GEMINI_API_KEY is required in environment variables');
+if (!OPENAI_API_KEY) {
+    console.error('❌ ERROR: OPENAI_API_KEY is required in environment variables');
     process.exit(1);
 }
 
@@ -80,7 +80,7 @@ async function connectToDatabase() {
 // ============================================================================
 // INITIALIZE HONEYPOT AGENT
 // ============================================================================
-const honeypotAgent = new AdaptiveHoneypotAgent(GEMINI_API_KEY);
+const honeypotAgent = new AdaptiveHoneypotAgent(OPENAI_API_KEY);
 console.log('✅ Adaptive Honeypot Agent initialized');
 
 // ============================================================================
@@ -484,7 +484,7 @@ async function startServer() {
             console.log(`🔗 Endpoint: http://localhost:${PORT}/api/honeypot`);
             console.log(`🔒 API Key: ${API_KEY ? 'Required' : 'Not required'}`);
             console.log(`💾 Database: ${db ? 'Connected' : 'Disconnected (using in-memory only)'}`);
-            console.log(`🤖 AI Model: Gemini 2.0 Flash`);
+            console.log(`🤖 AI Model: GPT-4o-mini (OpenAI)`);
             console.log('='.repeat(60) + '\n');
             console.log('Ready to engage scammers! 🎯\n');
         });
