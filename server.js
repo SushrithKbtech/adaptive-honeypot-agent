@@ -238,7 +238,7 @@ function normalizeFinalPayload(sessionData, agentResponse) {
 // ============================================================================
 // GUVI HACKATHON CALLBACK ENDPOINT
 // ============================================================================
-const GUVI_CALLBACK_URL = 'https://hackathon.guvi.in/api/updateHoneyPotFinalResult';
+const GUVI_CALLBACK_URL = 'https://guvi-honeypot-tester.onrender.com/callback';
 
 // ============================================================================
 // HELPER: SEND CALLBACK TO GUVI
