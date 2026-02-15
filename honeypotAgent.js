@@ -392,7 +392,7 @@ class AdaptiveHoneypotAgent {
   // ============================================================================
   // GENERATE CONTEXTUAL, NATURAL RESPONSE
   // ============================================================================
-  async generateResponse(message, conversationHistory, scamType, turnNumber) {
+  async generateResponse(message, conversationHistory, scamType, turnNumber, askedQuestions = []) {
     const persona = this.scamPatterns[scamType]?.persona || 'concerned_practical';
     const personaInstructions = this.getPersonaInstructions(persona, scamType, turnNumber);
 
@@ -401,6 +401,11 @@ class AdaptiveHoneypotAgent {
       .slice(-6) // Last 6 messages for context
       .map(m => `${m.sender === 'scammer' ? 'SCAMMER' : 'YOU'}: ${m.text}`)
       .join('\n');
+
+    // Build list of previously asked questions
+    const previouslyAsked = askedQuestions.length > 0
+      ? `\n\nQUESTIONS YOU'VE ALREADY ASKED (DO NOT REPEAT THESE):\n${askedQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`
+      : '';
 
     const prompt = `You are playing the role of an Indian person targeted by a scam. Your mission is to:
 1. Keep the scammer engaged in conversation as long as possible
@@ -420,13 +425,15 @@ ${conversationContext}
 SCAMMER'S LATEST MESSAGE:
 ${message}
 
-TURN NUMBER: ${turnNumber}
+TURN NUMBER: ${turnNumber}${previouslyAsked}
 
 CRITICAL RULES:
 - Keep your response under 2 sentences (40-60 words maximum)
 - Sound COMPLETELY natural and human
 - Don't be overly dramatic on every message (vary your emotions)
 - Ask ONE specific question that will make them reveal information
+- NEVER ask the same question twice - always ask NEW questions
+- If you've already asked about employee ID, ask about something else (phone, org name, reference number, etc.)
 - Use Indian English patterns naturally
 - NO emojis, NO obvious AI patterns
 - Don't repeat the same phrases (like "I'm worried") over and over
@@ -434,7 +441,7 @@ CRITICAL RULES:
 - Be adaptive - if they're being vague, push for specifics
 - If they're being pushy, show hesitation but don't shut down completely
 
-IMPORTANT: Respond as the VICTIM would, naturally and conversationally. Just give me your direct response, nothing else.`;
+IMPORTANT: Respond as the VICTIM would, naturally and conversationally. Ask a DIFFERENT question than before. Just give me your direct response, nothing else.`;
 
     try {
       const completion = await this.openai.chat.completions.create({
@@ -520,7 +527,7 @@ Keep it professional and concise.`;
   // ============================================================================
   // MAIN CONVERSATION HANDLER
   // ============================================================================
-  async handleMessage(sessionId, message, conversationHistory = [], metadata = {}) {
+  async handleMessage(sessionId, message, conversationHistory = [], metadata = {}, askedQuestions = []) {
     try {
       const turnNumber = Math.floor(conversationHistory.length / 2) + 1;
 
@@ -530,12 +537,13 @@ Keep it professional and concise.`;
       // Extract intelligence from current message
       const newIntelligence = this.extractIntelligence(message, conversationHistory);
 
-      // Generate natural, contextual response
+      // Generate natural, contextual response with question tracking
       const response = await this.generateResponse(
         message,
         conversationHistory,
         scamType,
-        turnNumber
+        turnNumber,
+        askedQuestions
       );
 
       return {

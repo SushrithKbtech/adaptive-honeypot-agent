@@ -87,7 +87,8 @@ function getOrCreateSession(sessionId) {
             },
             scamDetected: false,
             scamType: 'unknown',
-            turnCount: 0
+            turnCount: 0,
+            askedQuestions: []  // Track questions to prevent repetition
         });
     }
     return activeSessions.get(sessionId);
@@ -140,7 +141,7 @@ function mergeIntelligence(existing, newData) {
 // HELPER: POST-PROCESS REPLY (1-2 SENTENCES, ONE QUESTION)
 // ============================================================================
 function postProcessReply(reply) {
-    if (!reply) return "Can you tell me more?";
+    if (!reply) return { text: "Can you tell me more?", question: "Can you tell me more?" };
 
     // Split into sentences
     let sentences = reply
@@ -157,6 +158,7 @@ function postProcessReply(reply) {
 
     // Build final reply: max 1 statement + 1 question
     let finalParts = [];
+    let extractedQuestion = null;
 
     if (statementSentences.length > 0) {
         finalParts.push(statementSentences[0]);
@@ -165,13 +167,15 @@ function postProcessReply(reply) {
     if (questionSentences.length > 0) {
         // Pick the most valuable question (prefer ones with specific info requests)
         const bestQuestion = questionSentences.find(q =>
-            /\b(number|ID|name|address|email|phone|account|UPI|reference)\b/i.test(q)
+            /\b(number|ID|name|address|email|phone|account|UPI|reference|employee|customer|transaction)\b/i.test(q)
         ) || questionSentences[0];
 
-        finalParts.push(bestQuestion.includes('?') ? bestQuestion : bestQuestion + '?');
+        extractedQuestion = bestQuestion.includes('?') ? bestQuestion : bestQuestion + '?';
+        finalParts.push(extractedQuestion);
     } else if (finalParts.length === 0) {
         // No question found, create one
-        finalParts.push("Can you please tell me more about this?");
+        extractedQuestion = "Can you please tell me more about this?";
+        finalParts.push(extractedQuestion);
     } else {
         // Add a generic question if only statement exists
         const genericQuestions = [
@@ -179,10 +183,14 @@ function postProcessReply(reply) {
             "How should I proceed?",
             "What do I need to do?"
         ];
-        finalParts.push(genericQuestions[Math.floor(Math.random() * genericQuestions.length)]);
+        extractedQuestion = genericQuestions[Math.floor(Math.random() * genericQuestions.length)];
+        finalParts.push(extractedQuestion);
     }
 
-    return finalParts.join(' ').trim();
+    return {
+        text: finalParts.join(' ').trim(),
+        question: extractedQuestion
+    };
 }
 
 // ============================================================================
@@ -228,7 +236,45 @@ function normalizeFinalPayload(sessionData, agentResponse) {
 }
 
 // ============================================================================
-// HELPER: SEND CALLBACK
+// GUVI HACKATHON CALLBACK ENDPOINT
+// ============================================================================
+const GUVI_CALLBACK_URL = 'https://hackathon.guvi.in/api/updateHoneyPotFinalResult';
+
+// ============================================================================
+// HELPER: SEND CALLBACK TO GUVI
+// ============================================================================
+async function sendGuviCallback(sessionData) {
+    try {
+        // Build payload per GUVI spec
+        const payload = {
+            sessionId: sessionData.sessionId,
+            scamDetected: sessionData.scamDetected || true,
+            totalMessagesExchanged: sessionData.turnCount * 2,
+            extractedIntelligence: {
+                bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
+                upiIds: sessionData.extractedIntelligence.upiIds || [],
+                phishingLinks: sessionData.extractedIntelligence.phishingLinks || [],
+                phoneNumbers: sessionData.extractedIntelligence.phoneNumbers || [],
+                suspiciousKeywords: sessionData.extractedIntelligence.suspiciousKeywords || []
+            },
+            agentNotes: `${sessionData.scamType} scam detected. Engaged for ${sessionData.turnCount} turns. Extracted intelligence across multiple categories.`
+        };
+
+        console.log(`📤 Sending final callback to GUVI...`);
+
+        await axios.post(GUVI_CALLBACK_URL, payload, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 10000
+        });
+
+        console.log(`✅ GUVI callback sent successfully`);
+    } catch (error) {
+        console.error(`❌ GUVI callback failed: ${error.message}`);
+    }
+}
+
+// ============================================================================
+// HELPER: SEND CALLBACK (For custom callbacks if provided)
 // ============================================================================
 async function sendCallback(callbackUrl, payload, apiKey) {
     if (!callbackUrl) return;
@@ -322,16 +368,24 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             timestamp: message.timestamp || new Date().toISOString()
         });
 
-        // Call honeypot agent
+        // Call honeypot agent with question tracking
         const agentResponse = await honeypotAgent.handleMessage(
             sessionId,
             message.text,
             agentHistory,
-            metadata
+            metadata,
+            session.askedQuestions  // Pass previously asked questions
         );
 
         // Post-process reply to ensure 1-2 sentences with ONE question
-        const processedReply = postProcessReply(agentResponse.reply);
+        const processed = postProcessReply(agentResponse.reply);
+        const processedReply = processed.text;
+        const extractedQuestion = processed.question;
+
+        // Track the new question to prevent repetition
+        if (extractedQuestion && !session.askedQuestions.includes(extractedQuestion)) {
+            session.askedQuestions.push(extractedQuestion);
+        }
 
         // Update session state
         session.messages.push({
@@ -357,57 +411,50 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
         // Calculate engagement metrics
         const durationSeconds = Math.round((Date.now() - session.sessionStartMs) / 1000);
 
-        // Build response payload
+        // Build response payload per GUVI spec (simple format)
         const responsePayload = {
             status: 'success',
-            reply: processedReply,
-            scamDetected: session.scamDetected,
-            extractedIntelligence: {
-                phoneNumbers: session.extractedIntelligence.phoneNumbers,
-                bankAccounts: session.extractedIntelligence.bankAccounts,
-                upiIds: session.extractedIntelligence.upiIds,
-                phishingLinks: session.extractedIntelligence.phishingLinks,
-                emailAddresses: session.extractedIntelligence.emailAddresses,
-                // Additional fields
-                trackingIds: session.extractedIntelligence.trackingIds,
-                challanNumbers: session.extractedIntelligence.challanNumbers,
-                consumerNumbers: session.extractedIntelligence.consumerNumbers,
-                vehicleNumbers: session.extractedIntelligence.vehicleNumbers,
-                employeeIds: session.extractedIntelligence.employeeIds,
-                ifscCodes: session.extractedIntelligence.ifscCodes,
-                amounts: session.extractedIntelligence.amounts,
-                merchantNames: session.extractedIntelligence.merchantNames,
-                orgNames: session.extractedIntelligence.orgNames,
-                departmentNames: session.extractedIntelligence.departmentNames,
-                supervisorNames: session.extractedIntelligence.supervisorNames,
-                transactionIds: session.extractedIntelligence.transactionIds
-            },
-            engagementMetrics: {
-                totalMessagesExchanged: session.turnCount * 2,
-                engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1
-            },
-            agentNotes: `${session.scamType} scam. Turn ${session.turnCount}. Engaging to extract maximum intelligence.`
+            reply: processedReply
         };
 
-        // Check for termination (>=10 turns or agent signals termination)
+        // Check for termination (>=10 turns)
         const shouldTerminate = session.turnCount >= 10;
-
-        // Send callback on EVERY turn if provided (some evaluators expect this)
-        if (callbackUrl) {
-            const callbackPayload = shouldTerminate
-                ? normalizeFinalPayload(session, agentResponse)
-                : responsePayload;
-
-            console.log(`📤 Sending callback to: ${callbackUrl}`);
-            await sendCallback(callbackUrl, callbackPayload, API_KEY);
-        }
 
         if (shouldTerminate) {
             console.log(`\n🏁 Session ${sessionId} terminating at turn ${session.turnCount}`);
 
+            // Send mandatory GUVI callback
+            await sendGuviCallback(session);
+
             // Add termination flag to response
             responsePayload.terminated = true;
             responsePayload.terminationReason = 'max_turns_reached';
+        }
+
+        // Send custom callback if provided (for compatibility)
+        if (callbackUrl) {
+            const callbackPayload = shouldTerminate
+                ? normalizeFinalPayload(session, agentResponse)
+                : {
+                    status: 'success',
+                    reply: processedReply,
+                    scamDetected: session.scamDetected,
+                    extractedIntelligence: {
+                        phoneNumbers: session.extractedIntelligence.phoneNumbers,
+                        bankAccounts: session.extractedIntelligence.bankAccounts,
+                        upiIds: session.extractedIntelligence.upiIds,
+                        phishingLinks: session.extractedIntelligence.phishingLinks,
+                        emailAddresses: session.extractedIntelligence.emailAddresses
+                    },
+                    engagementMetrics: {
+                        totalMessagesExchanged: session.turnCount * 2,
+                        engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1
+                    },
+                    agentNotes: `${session.scamType} scam. Turn ${session.turnCount}.`
+                };
+
+            console.log(`📤 Sending callback to: ${callbackUrl}`);
+            await sendCallback(callbackUrl, callbackPayload, API_KEY);
         }
 
         const responseTime = Date.now() - startTime;
