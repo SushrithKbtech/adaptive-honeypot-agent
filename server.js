@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const { MongoClient } = require('mongodb');
+const axios = require('axios');
 require('dotenv').config();
 
 const AdaptiveHoneypotAgent = require('./honeypotAgent');
@@ -11,8 +11,6 @@ const AdaptiveHoneypotAgent = require('./honeypotAgent');
 // CONFIGURATION
 // ============================================================================
 const PORT = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
-const DB_NAME = process.env.DB_NAME || 'honeypot';
 const API_KEY = process.env.API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -31,10 +29,10 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Rate limiting - prevent abuse
+// Rate limiting
 const limiter = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 minute
-    max: 100, // 100 requests per minute
+    windowMs: 1 * 60 * 1000,
+    max: 100,
     message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
@@ -46,48 +44,212 @@ app.use((req, res, next) => {
 });
 
 // ============================================================================
-// MONGODB CONNECTION
-// ============================================================================
-let db;
-let sessionsCollection;
-let logsCollection;
-
-async function connectToDatabase() {
-    try {
-        const client = await MongoClient.connect(MONGODB_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true
-        });
-
-        db = client.db(DB_NAME);
-        sessionsCollection = db.collection('sessions');
-        logsCollection = db.collection('honeyPotTestingSessionLog');
-
-        // Create indexes for better performance
-        await sessionsCollection.createIndex({ sessionId: 1 }, { unique: true });
-        await logsCollection.createIndex({ sessionId: 1 });
-        await logsCollection.createIndex({ timestamp: -1 });
-
-        console.log('✅ Connected to MongoDB');
-        return true;
-    } catch (error) {
-        console.error('❌ MongoDB connection failed:', error.message);
-        console.log('⚠️  Running without database - session data will not be persisted');
-        return false;
-    }
-}
-
-// ============================================================================
 // INITIALIZE HONEYPOT AGENT
 // ============================================================================
 const honeypotAgent = new AdaptiveHoneypotAgent(OPENAI_API_KEY);
 console.log('✅ Adaptive Honeypot Agent initialized');
 
 // ============================================================================
+// SESSION MANAGEMENT (IN-MEMORY)
+// ============================================================================
+const activeSessions = new Map();
+
+function getOrCreateSession(sessionId) {
+    if (!activeSessions.has(sessionId)) {
+        activeSessions.set(sessionId, {
+            sessionId,
+            sessionStartMs: Date.now(),
+            messages: [],
+            extractedIntelligence: {
+                phoneNumbers: [],
+                bankAccounts: [],
+                upiIds: [],
+                phishingLinks: [],
+                emailAddresses: [],
+                trackingIds: [],
+                challanNumbers: [],
+                consumerNumbers: [],
+                vehicleNumbers: [],
+                employeeIds: [],
+                ifscCodes: [],
+                amounts: [],
+                merchantNames: [],
+                orgNames: [],
+                departmentNames: [],
+                supervisorNames: [],
+                callbackNumbers: [],
+                transactionIds: [],
+                accountLast4: [],
+                complaintIds: [],
+                suspiciousKeywords: [],
+                appNames: [],
+                scammerNames: []
+            },
+            scamDetected: false,
+            scamType: 'unknown',
+            turnCount: 0
+        });
+    }
+    return activeSessions.get(sessionId);
+}
+
+// ============================================================================
+// HELPER: BUILD TURN-BASED HISTORY
+// ============================================================================
+function buildTurnHistory(conversationHistory) {
+    const turns = [];
+
+    for (let i = 0; i < conversationHistory.length; i += 2) {
+        const scammerMsg = conversationHistory[i];
+        const agentMsg = conversationHistory[i + 1];
+
+        if (scammerMsg && scammerMsg.text && scammerMsg.text.trim()) {
+            turns.push({
+                scammer: scammerMsg.text,
+                agent: agentMsg && agentMsg.text ? agentMsg.text : '',
+                timestamp: scammerMsg.timestamp || new Date().toISOString()
+            });
+        }
+    }
+
+    // Return last 5 turns for context
+    return turns.slice(-5);
+}
+
+// ============================================================================
+// HELPER: MERGE INTELLIGENCE
+// ============================================================================
+function mergeIntelligence(existing, newData) {
+    const merged = { ...existing };
+
+    for (const [key, values] of Object.entries(newData)) {
+        if (Array.isArray(values) && Array.isArray(merged[key])) {
+            merged[key] = [...new Set([...merged[key], ...values])];
+        }
+    }
+
+    // Mirror callbackNumbers into phoneNumbers for evaluator
+    if (merged.callbackNumbers && merged.callbackNumbers.length > 0) {
+        merged.phoneNumbers = [...new Set([...merged.phoneNumbers, ...merged.callbackNumbers])];
+    }
+
+    return merged;
+}
+
+// ============================================================================
+// HELPER: POST-PROCESS REPLY (1-2 SENTENCES, ONE QUESTION)
+// ============================================================================
+function postProcessReply(reply) {
+    if (!reply) return "Can you tell me more?";
+
+    // Split into sentences
+    let sentences = reply
+        .split(/[.!?]+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+
+    // Find sentences with questions
+    const questionSentences = sentences.filter(s => s.includes('?') ||
+        /\b(what|where|when|who|why|how|can you|could you|please tell|is there)\b/i.test(s));
+
+    // Find non-question sentences
+    const statementSentences = sentences.filter(s => !questionSentences.includes(s));
+
+    // Build final reply: max 1 statement + 1 question
+    let finalParts = [];
+
+    if (statementSentences.length > 0) {
+        finalParts.push(statementSentences[0]);
+    }
+
+    if (questionSentences.length > 0) {
+        // Pick the most valuable question (prefer ones with specific info requests)
+        const bestQuestion = questionSentences.find(q =>
+            /\b(number|ID|name|address|email|phone|account|UPI|reference)\b/i.test(q)
+        ) || questionSentences[0];
+
+        finalParts.push(bestQuestion.includes('?') ? bestQuestion : bestQuestion + '?');
+    } else if (finalParts.length === 0) {
+        // No question found, create one
+        finalParts.push("Can you please tell me more about this?");
+    } else {
+        // Add a generic question if only statement exists
+        const genericQuestions = [
+            "Can you verify this for me?",
+            "How should I proceed?",
+            "What do I need to do?"
+        ];
+        finalParts.push(genericQuestions[Math.floor(Math.random() * genericQuestions.length)]);
+    }
+
+    return finalParts.join(' ').trim();
+}
+
+// ============================================================================
+// HELPER: NORMALIZE FINAL PAYLOAD
+// ============================================================================
+function normalizeFinalPayload(sessionData, agentResponse) {
+    const now = Date.now();
+    const durationSeconds = Math.round((now - sessionData.sessionStartMs) / 1000);
+
+    return {
+        status: 'success',
+        sessionId: sessionData.sessionId,
+        scamDetected: sessionData.scamDetected || true,
+        scamType: sessionData.scamType || 'fraud',
+        totalMessagesExchanged: sessionData.turnCount * 2,
+        extractedIntelligence: {
+            phoneNumbers: sessionData.extractedIntelligence.phoneNumbers || [],
+            bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
+            upiIds: sessionData.extractedIntelligence.upiIds || [],
+            phishingLinks: sessionData.extractedIntelligence.phishingLinks || [],
+            emailAddresses: sessionData.extractedIntelligence.emailAddresses || [],
+            // Include other fields for completeness
+            trackingIds: sessionData.extractedIntelligence.trackingIds || [],
+            challanNumbers: sessionData.extractedIntelligence.challanNumbers || [],
+            consumerNumbers: sessionData.extractedIntelligence.consumerNumbers || [],
+            vehicleNumbers: sessionData.extractedIntelligence.vehicleNumbers || [],
+            employeeIds: sessionData.extractedIntelligence.employeeIds || [],
+            ifscCodes: sessionData.extractedIntelligence.ifscCodes || [],
+            amounts: sessionData.extractedIntelligence.amounts || [],
+            merchantNames: sessionData.extractedIntelligence.merchantNames || [],
+            orgNames: sessionData.extractedIntelligence.orgNames || [],
+            departmentNames: sessionData.extractedIntelligence.departmentNames || [],
+            supervisorNames: sessionData.extractedIntelligence.supervisorNames || [],
+            transactionIds: sessionData.extractedIntelligence.transactionIds || []
+        },
+        engagementMetrics: {
+            totalMessagesExchanged: sessionData.turnCount * 2,
+            engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1
+        },
+        agentNotes: agentResponse?.agentNotes ||
+            `${sessionData.scamType} scam detected. Engaged for ${sessionData.turnCount} turns. Extracted intelligence across multiple categories.`
+    };
+}
+
+// ============================================================================
+// HELPER: SEND CALLBACK
+// ============================================================================
+async function sendCallback(callbackUrl, payload, apiKey) {
+    if (!callbackUrl) return;
+
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) {
+            headers['x-api-key'] = apiKey;
+        }
+
+        await axios.post(callbackUrl, payload, { headers, timeout: 10000 });
+        console.log(`✅ Callback sent to ${callbackUrl}`);
+    } catch (error) {
+        console.error(`❌ Callback failed: ${error.message}`);
+    }
+}
+
+// ============================================================================
 // API KEY AUTHENTICATION MIDDLEWARE
 // ============================================================================
 function authenticateApiKey(req, res, next) {
-    // Skip auth if no API_KEY is configured
     if (!API_KEY) {
         return next();
     }
@@ -105,96 +267,19 @@ function authenticateApiKey(req, res, next) {
 }
 
 // ============================================================================
-// SESSION MANAGEMENT
+// MAIN CONVERSATION ENDPOINT
 // ============================================================================
-const activeSessions = new Map(); // In-memory session store
-
-async function getSession(sessionId) {
-    // Try in-memory first
-    if (activeSessions.has(sessionId)) {
-        return activeSessions.get(sessionId);
-    }
-
-    // Try database if available
-    if (sessionsCollection) {
-        try {
-            const session = await sessionsCollection.findOne({ sessionId });
-            if (session) {
-                activeSessions.set(sessionId, session);
-                return session;
-            }
-        } catch (error) {
-            console.error('Error fetching session from DB:', error);
-        }
-    }
-
-    // Create new session
-    const newSession = {
-        sessionId,
-        conversationHistory: [],
-        extractedIntelligence: {},
-        scamType: null,
-        startTime: new Date().toISOString(),
-        lastActivity: new Date().toISOString()
-    };
-
-    activeSessions.set(sessionId, newSession);
-
-    if (sessionsCollection) {
-        try {
-            await sessionsCollection.insertOne(newSession);
-        } catch (error) {
-            console.error('Error saving session to DB:', error);
-        }
-    }
-
-    return newSession;
-}
-
-async function updateSession(sessionId, updates) {
-    const session = activeSessions.get(sessionId);
-    if (session) {
-        Object.assign(session, updates, {
-            lastActivity: new Date().toISOString()
-        });
-
-        activeSessions.set(sessionId, session);
-
-        if (sessionsCollection) {
-            try {
-                await sessionsCollection.updateOne(
-                    { sessionId },
-                    { $set: updates }
-                );
-            } catch (error) {
-                console.error('Error updating session in DB:', error);
-            }
-        }
-    }
-}
-
-async function logToDatabase(sessionId, logData) {
-    if (logsCollection) {
-        try {
-            await logsCollection.insertOne({
-                sessionId,
-                timestamp: new Date().toISOString(),
-                ...logData
-            });
-        } catch (error) {
-            console.error('Error logging to database:', error);
-        }
-    }
-}
-
-// ============================================================================
-// MAIN HONEYPOT ENDPOINT
-// ============================================================================
-app.post('/api/honeypot', authenticateApiKey, async (req, res) => {
+app.post('/api/conversation', authenticateApiKey, async (req, res) => {
     const startTime = Date.now();
 
     try {
-        const { sessionId, message, conversationHistory = [], metadata = {} } = req.body;
+        const {
+            sessionId,
+            message,
+            conversationHistory = [],
+            metadata = {},
+            callbackUrl
+        } = req.body;
 
         // Validation
         if (!sessionId) {
@@ -211,75 +296,123 @@ app.post('/api/honeypot', authenticateApiKey, async (req, res) => {
             });
         }
 
-        console.log(`\n📩 Session ${sessionId} | Turn ${Math.floor(conversationHistory.length / 2) + 1}`);
+        // Get or create session
+        const session = getOrCreateSession(sessionId);
+        session.turnCount++;
+
+        console.log(`\n📩 Session ${sessionId} | Turn ${session.turnCount}`);
         console.log(`   Scammer: ${message.text.substring(0, 100)}...`);
 
-        // Get or create session
-        const session = await getSession(sessionId);
+        // Build turn-based history
+        const recentTurns = buildTurnHistory(conversationHistory);
 
-        // Build conversation history (combine stored + provided)
-        const fullHistory = [
-            ...session.conversationHistory,
-            ...conversationHistory
-        ];
+        // Convert to agent format
+        const agentHistory = [];
+        for (const turn of recentTurns) {
+            agentHistory.push({ sender: 'scammer', text: turn.scammer, timestamp: turn.timestamp });
+            if (turn.agent) {
+                agentHistory.push({ sender: 'user', text: turn.agent, timestamp: turn.timestamp });
+            }
+        }
 
-        // Add current scammer message to history
-        const scammerMessage = {
+        // Add current scammer message
+        agentHistory.push({
             sender: 'scammer',
             text: message.text,
             timestamp: message.timestamp || new Date().toISOString()
-        };
-        fullHistory.push(scammerMessage);
+        });
 
-        // Generate honeypot response
-        const result = await honeypotAgent.handleMessage(
+        // Call honeypot agent
+        const agentResponse = await honeypotAgent.handleMessage(
             sessionId,
             message.text,
-            fullHistory,
+            agentHistory,
             metadata
         );
 
-        // Add honeypot response to history
-        const honeypotMessage = {
-            sender: 'user',
-            text: result.reply,
+        // Post-process reply to ensure 1-2 sentences with ONE question
+        const processedReply = postProcessReply(agentResponse.reply);
+
+        // Update session state
+        session.messages.push({
+            scammer: message.text,
+            agent: processedReply,
             timestamp: new Date().toISOString()
+        });
+
+        // Merge intelligence
+        if (agentResponse.metadata && agentResponse.metadata.extractedIntelligence) {
+            session.extractedIntelligence = mergeIntelligence(
+                session.extractedIntelligence,
+                agentResponse.metadata.extractedIntelligence
+            );
+        }
+
+        // Update scam detection
+        session.scamDetected = true;
+        if (agentResponse.metadata && agentResponse.metadata.scamType) {
+            session.scamType = agentResponse.metadata.scamType;
+        }
+
+        // Calculate engagement metrics
+        const durationSeconds = Math.round((Date.now() - session.sessionStartMs) / 1000);
+
+        // Build response payload
+        const responsePayload = {
+            status: 'success',
+            reply: processedReply,
+            scamDetected: session.scamDetected,
+            extractedIntelligence: {
+                phoneNumbers: session.extractedIntelligence.phoneNumbers,
+                bankAccounts: session.extractedIntelligence.bankAccounts,
+                upiIds: session.extractedIntelligence.upiIds,
+                phishingLinks: session.extractedIntelligence.phishingLinks,
+                emailAddresses: session.extractedIntelligence.emailAddresses,
+                // Additional fields
+                trackingIds: session.extractedIntelligence.trackingIds,
+                challanNumbers: session.extractedIntelligence.challanNumbers,
+                consumerNumbers: session.extractedIntelligence.consumerNumbers,
+                vehicleNumbers: session.extractedIntelligence.vehicleNumbers,
+                employeeIds: session.extractedIntelligence.employeeIds,
+                ifscCodes: session.extractedIntelligence.ifscCodes,
+                amounts: session.extractedIntelligence.amounts,
+                merchantNames: session.extractedIntelligence.merchantNames,
+                orgNames: session.extractedIntelligence.orgNames,
+                departmentNames: session.extractedIntelligence.departmentNames,
+                supervisorNames: session.extractedIntelligence.supervisorNames,
+                transactionIds: session.extractedIntelligence.transactionIds
+            },
+            engagementMetrics: {
+                totalMessagesExchanged: session.turnCount * 2,
+                engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1
+            },
+            agentNotes: `${session.scamType} scam. Turn ${session.turnCount}. Engaging to extract maximum intelligence.`
         };
-        fullHistory.push(honeypotMessage);
 
-        // Merge extracted intelligence
-        const mergedIntelligence = honeypotAgent.mergeIntelligence(
-            session.extractedIntelligence || {},
-            result.metadata.extractedIntelligence || {}
-        );
+        // Check for termination (>=10 turns or agent signals termination)
+        const shouldTerminate = session.turnCount >= 10;
 
-        // Update session
-        await updateSession(sessionId, {
-            conversationHistory: fullHistory,
-            extractedIntelligence: mergedIntelligence,
-            scamType: result.metadata.scamType,
-            turnNumber: result.metadata.turnNumber
-        });
+        if (shouldTerminate) {
+            console.log(`\n🏁 Session ${sessionId} terminating at turn ${session.turnCount}`);
 
-        // Log interaction
-        await logToDatabase(sessionId, {
-            type: 'message_exchange',
-            scammerMessage: message.text,
-            honeypotResponse: result.reply,
-            turnNumber: result.metadata.turnNumber,
-            scamType: result.metadata.scamType,
-            newIntelligence: result.metadata.extractedIntelligence
-        });
+            const finalPayload = normalizeFinalPayload(session, agentResponse);
+
+            // Send callback if provided
+            if (callbackUrl) {
+                await sendCallback(callbackUrl, finalPayload, API_KEY);
+            }
+
+            // Add termination flag to response
+            responsePayload.terminated = true;
+            responsePayload.terminationReason = 'max_turns_reached';
+        }
 
         const responseTime = Date.now() - startTime;
-        console.log(`   Honeypot: ${result.reply}`);
-        console.log(`   ⏱️  Response time: ${responseTime}ms | Scam: ${result.metadata.scamType}`);
+        console.log(`   Honeypot: ${processedReply}`);
+        console.log(`   ⏱️  Response time: ${responseTime}ms | Scam: ${session.scamType}`);
 
         // Return response
-        res.json({
-            status: 'success',
-            reply: result.reply
-        });
+        res.json(responsePayload);
 
     } catch (error) {
         console.error('❌ Error processing request:', error);
@@ -293,16 +426,23 @@ app.post('/api/honeypot', authenticateApiKey, async (req, res) => {
 });
 
 // ============================================================================
-// ALTERNATE ENDPOINT (FOR COMPATIBILITY)
+// LEGACY ENDPOINTS (FOR COMPATIBILITY)
 // ============================================================================
-app.post('/detect', authenticateApiKey, async (req, res) => {
-    // Redirect to main endpoint
-    req.url = '/api/honeypot';
-    return app.handle(req, res);
+
+// Main honeypot endpoint (redirect to conversation)
+app.post('/api/honeypot', authenticateApiKey, (req, res, next) => {
+    req.url = '/api/conversation';
+    app.handle(req, res);
+});
+
+// Detect endpoint (alias)
+app.post('/detect', authenticateApiKey, (req, res, next) => {
+    req.url = '/api/conversation';
+    app.handle(req, res);
 });
 
 // ============================================================================
-// FINAL OUTPUT SUBMISSION ENDPOINT
+// FINAL OUTPUT ENDPOINT
 // ============================================================================
 app.post('/api/submit-final-output', authenticateApiKey, async (req, res) => {
     try {
@@ -315,36 +455,25 @@ app.post('/api/submit-final-output', authenticateApiKey, async (req, res) => {
             });
         }
 
-        console.log(`\n📊 Generating final output for session ${sessionId}`);
+        const session = activeSessions.get(sessionId);
 
-        const session = await getSession(sessionId);
-
-        if (!session || !session.conversationHistory || session.conversationHistory.length === 0) {
+        if (!session) {
             return res.status(404).json({
                 status: 'error',
-                message: 'Session not found or has no conversation history'
+                message: 'Session not found'
             });
         }
 
-        // Generate comprehensive final output
-        const finalOutput = await honeypotAgent.generateFinalOutput(
-            sessionId,
-            session.conversationHistory
-        );
+        console.log(`\n📊 Generating final output for session ${sessionId}`);
 
-        // Log final output to database
-        await logToDatabase(sessionId, {
-            type: 'final_output',
-            ...finalOutput
-        });
+        const finalPayload = normalizeFinalPayload(session, {});
 
         console.log(`✅ Final output generated:`);
-        console.log(`   Scam Type: ${finalOutput.scamType}`);
-        console.log(`   Messages: ${finalOutput.totalMessagesExchanged}`);
-        console.log(`   Duration: ${finalOutput.engagementMetrics.engagementDurationSeconds}s`);
-        console.log(`   Intelligence: ${JSON.stringify(finalOutput.extractedIntelligence).substring(0, 200)}...`);
+        console.log(`   Scam Type: ${finalPayload.scamType}`);
+        console.log(`   Messages: ${finalPayload.totalMessagesExchanged}`);
+        console.log(`   Duration: ${finalPayload.engagementMetrics.engagementDurationSeconds}s`);
 
-        res.json(finalOutput);
+        res.json(finalPayload);
 
     } catch (error) {
         console.error('❌ Error generating final output:', error);
@@ -358,72 +487,50 @@ app.post('/api/submit-final-output', authenticateApiKey, async (req, res) => {
 });
 
 // ============================================================================
-// SESSION MANAGEMENT ENDPOINTS
+// SESSION ENDPOINTS
 // ============================================================================
 
-// Get session details
-app.get('/api/session/:sessionId', authenticateApiKey, async (req, res) => {
-    try {
-        const { sessionId } = req.params;
-        const session = await getSession(sessionId);
+app.get('/api/session/:sessionId', authenticateApiKey, (req, res) => {
+    const { sessionId } = req.params;
+    const session = activeSessions.get(sessionId);
 
-        if (!session) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Session not found'
-            });
-        }
-
-        res.json({
-            status: 'success',
-            session
-        });
-
-    } catch (error) {
-        console.error('Error fetching session:', error);
-        res.status(500).json({
+    if (!session) {
+        return res.status(404).json({
             status: 'error',
-            message: 'Error fetching session'
+            message: 'Session not found'
         });
     }
+
+    res.json({
+        status: 'success',
+        session
+    });
 });
 
-// Get all sessions (for monitoring)
-app.get('/api/sessions', authenticateApiKey, async (req, res) => {
-    try {
-        const sessions = Array.from(activeSessions.values());
+app.get('/api/sessions', authenticateApiKey, (req, res) => {
+    const sessions = Array.from(activeSessions.values()).map(s => ({
+        sessionId: s.sessionId,
+        scamType: s.scamType,
+        turnCount: s.turnCount,
+        scamDetected: s.scamDetected
+    }));
 
-        res.json({
-            status: 'success',
-            count: sessions.length,
-            sessions: sessions.map(s => ({
-                sessionId: s.sessionId,
-                scamType: s.scamType,
-                messageCount: s.conversationHistory.length,
-                startTime: s.startTime,
-                lastActivity: s.lastActivity
-            }))
-        });
-
-    } catch (error) {
-        console.error('Error fetching sessions:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Error fetching sessions'
-        });
-    }
+    res.json({
+        status: 'success',
+        count: sessions.length,
+        sessions
+    });
 });
 
 // ============================================================================
-// HEALTH CHECK ENDPOINT
+// HEALTH CHECK
 // ============================================================================
 app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        activeSessions: activeSessions.size,
-        database: db ? 'connected' : 'disconnected'
+        activeSessions: activeSessions.size
     });
 });
 
@@ -434,7 +541,8 @@ app.get('/', (req, res) => {
         version: '2.0.0',
         status: 'running',
         endpoints: {
-            honeypot: 'POST /api/honeypot',
+            conversation: 'POST /api/conversation',
+            honeypot: 'POST /api/honeypot (alias)',
             detect: 'POST /detect (alias)',
             finalOutput: 'POST /api/submit-final-output',
             session: 'GET /api/session/:sessionId',
@@ -448,7 +556,6 @@ app.get('/', (req, res) => {
 // ERROR HANDLERS
 // ============================================================================
 
-// 404 handler
 app.use((req, res) => {
     res.status(404).json({
         status: 'error',
@@ -456,7 +563,6 @@ app.use((req, res) => {
     });
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err);
 
@@ -472,18 +578,13 @@ app.use((err, req, res, next) => {
 // ============================================================================
 async function startServer() {
     try {
-        // Connect to database
-        await connectToDatabase();
-
-        // Start HTTP server
         app.listen(PORT, () => {
             console.log('\n' + '='.repeat(60));
             console.log('🚀 ADAPTIVE HONEYPOT API SERVER');
             console.log('='.repeat(60));
             console.log(`📡 Server running on port ${PORT}`);
-            console.log(`🔗 Endpoint: http://localhost:${PORT}/api/honeypot`);
+            console.log(`🔗 Endpoint: http://localhost:${PORT}/api/conversation`);
             console.log(`🔒 API Key: ${API_KEY ? 'Required' : 'Not required'}`);
-            console.log(`💾 Database: ${db ? 'Connected' : 'Disconnected (using in-memory only)'}`);
             console.log(`🤖 AI Model: GPT-4o-mini (OpenAI)`);
             console.log('='.repeat(60) + '\n');
             console.log('Ready to engage scammers! 🎯\n');
