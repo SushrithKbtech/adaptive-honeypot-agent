@@ -392,15 +392,18 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
         // Check for termination (>=10 turns or agent signals termination)
         const shouldTerminate = session.turnCount >= 10;
 
+        // Send callback on EVERY turn if provided (some evaluators expect this)
+        if (callbackUrl) {
+            const callbackPayload = shouldTerminate
+                ? normalizeFinalPayload(session, agentResponse)
+                : responsePayload;
+
+            console.log(`📤 Sending callback to: ${callbackUrl}`);
+            await sendCallback(callbackUrl, callbackPayload, API_KEY);
+        }
+
         if (shouldTerminate) {
             console.log(`\n🏁 Session ${sessionId} terminating at turn ${session.turnCount}`);
-
-            const finalPayload = normalizeFinalPayload(session, agentResponse);
-
-            // Send callback if provided
-            if (callbackUrl) {
-                await sendCallback(callbackUrl, finalPayload, API_KEY);
-            }
 
             // Add termination flag to response
             responsePayload.terminated = true;
