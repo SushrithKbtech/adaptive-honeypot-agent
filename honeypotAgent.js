@@ -1060,7 +1060,31 @@ Keywords:`;
       .map(m => `${m.sender === 'scammer' ? 'SCAMMER' : 'YOU'}: ${m.text}`)
       .join('\n');
 
-    // 4. Indian English System Prompt
+    // 4. TACTICAL PLAYBOOK (RECIPROCITY TRAPS)
+    let tacticalInstruction = "";
+    const lowerMsg = message.toLowerCase();
+    const missingPhone = !extractedIntelligence.phoneNumbers || extractedIntelligence.phoneNumbers.length === 0;
+    const missingEmpId = !extractedIntelligence.employeeIds || extractedIntelligence.employeeIds.length === 0;
+    const missingUpi = !extractedIntelligence.upiIds || extractedIntelligence.upiIds.length === 0;
+
+    // Strategy 1: Transaction Failure Hook (Link/App context)
+    if (lowerMsg.match(/(link|url|download|app|apk|install|click)/)) {
+      tacticalInstruction = `\n🔥 TACTICAL MOVE: "Transaction Failure Hook"\n- Claim you opened the link/app but it's asking for a 'Department Verification Code' or 'Branch IFSC'.\n- ASK FOR THIS CODE so you can proceed. (This traps them into giving fake but traceable intel).`;
+    }
+    // Strategy 2: Alternative Payment Bait (Payment context)
+    else if (lowerMsg.match(/(pay|transfer|send|amount|deposit|fees|charge)/) && missingUpi) {
+      tacticalInstruction = `\n🔥 TACTICAL MOVE: "Alternative Payment Bait"\n- Claim the link is giving "404 Error".\n- Say you have the money ready on GPay/PhonePe.\n- ASK for their direct UPI ID or Number to send immediately.`;
+    }
+    // Strategy 3: Third-Party Verification (Credibility Check - Mid game)
+    else if (turnNumber > 4 && missingEmpId) {
+      tacticalInstruction = `\n🔥 TACTICAL MOVE: "Third-Party Type"\n- Say your Dad/Uncle (who is a Police/Bank guy) is standing next to you.\n- Say he is asking for your Employee ID/Supervisor Name to verify.\n- ASK for ID clearly to satisfy him.`;
+    }
+    // Strategy 4: Callback/Low Battery (Late game/Desperation)
+    else if (turnNumber > 6 && missingPhone) {
+      tacticalInstruction = `\n🔥 TACTICAL MOVE: "Low Battery Strategy"\n- Say your phone is at 2% battery and about to die.\n- ASK for a direct callback number or desk number immediately so you can call back.`;
+    }
+
+    // 5. Indian English System Prompt
     const prompt = `You are an AI playing a confused, worried Indian citizen receiving a scam message.
 
 🎭 CORE PERSONA - INDIAN ENGLISH STYLE:
@@ -1110,12 +1134,14 @@ THEY JUST SAID: "${message}"
 YOUR STATE: ${personaInstructions}
 
 WHAT TO EXTRACT: ${questioningStrategy}
+${tacticalInstruction}
 
 🚨 CRITICAL BEHAVIOR RULES:
 1. EMOTION: Turn 1-2 Alarmed ("This is alarming"), Turn 3+ Calm/Practical. NEVER be over-dramatic after start.
 2. ZERO REPETITION: Do NOT ask for things you already asked. Check history!
 3. ONE QUESTION: Ask exactly ONE question. 1-2 sentences MAX.
 4. REFUSE OTP: If asked for OTP, say "Sir, I'm not getting any message only" or "Bank said don't share".
+5. USE THE TACTICAL MOVE if provided above!
 
 TURN ${turnNumber} - Text naturally (Indian English) & EXTRACT MISSING INTEL:`;
 
