@@ -146,9 +146,6 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     if (!reply) return { text: "Can you tell me more?", question: "Can you tell me more?" };
 
     const isLinkOrAppContext = /\b(link|url|website|click|download|app|apk)\b/i.test(String(scammerText || ''));
-    const isHighRiskContext = /\b(kyc|account|bank|otp|verify|urgent|immediately|blocked|suspended|payment|upi|refund|penalty|fine)\b/i
-        .test(String(scammerText || ''));
-    const shouldElongate = isLinkOrAppContext || isHighRiskContext || (turn > 0 && turn % 3 === 0);
     const normalizedAsked = new Set(
         (askedQuestions || [])
             .map(q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim())
@@ -284,7 +281,7 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     // Find non-question sentences
     const statementSentences = sentences.filter(s => !questionSentences.includes(s));
 
-    // Build final reply: up to 2 statements + 1 question (occasionally 3 sentences)
+    // Build final reply: up to 2 statements + 1 question (LLM should drive statements)
     let finalParts = [];
     let extractedQuestion = null;
 
@@ -292,32 +289,8 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
         finalParts.push(statementSentences[0]);
     }
 
-    const linkAsides = [
-        "I'm not that tech savvy, my daughter usually handles links for me",
-        "This phone is old, it hangs when I click links",
-        "I get confused with links, I don't want to click the wrong thing",
-        "I don't want to click the wrong link by mistake",
-        "I'm not comfortable opening links from unknown numbers"
-    ];
-    const generalAsides = [
-        "I'm getting a bit confused and trying to understand properly",
-        "I'm worried and just want to do this the right way",
-        "I'm trying to follow, but it's not very clear to me",
-        "I'm a bit tense, please explain clearly",
-        "I'm just trying to be careful here"
-    ];
-
-    let usedAside = null;
     if (statementSentences.length > 1) {
         finalParts.push(statementSentences[1]);
-    } else if (shouldElongate) {
-        const pool = isLinkOrAppContext ? linkAsides : generalAsides;
-        const candidates = pool.filter(a => !normalizedAsides.has(String(a).toLowerCase().replace(/\s+/g, ' ').trim()));
-        const aside = (candidates.length ? candidates : pool)[(turn || 1) % pool.length];
-        if (aside) {
-            usedAside = aside;
-            finalParts.push(aside);
-        }
     }
 
     if (questionSentences.length > 0) {
@@ -328,7 +301,8 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
 
         extractedQuestion = bestQuestion.includes('?') ? bestQuestion : bestQuestion + '?';
         const topic = detectQuestionTopic(extractedQuestion);
-        if (isRepeatedQuestion(extractedQuestion) || normalizedTopics.has(topic)) {
+        const isGeneric = topic === 'general' || topic === 'verification' || topic === 'process';
+        if (isRepeatedQuestion(extractedQuestion) || normalizedTopics.has(topic) || isGeneric) {
             extractedQuestion = pickFallbackQuestion();
         }
         finalParts.push(extractedQuestion);
@@ -342,10 +316,15 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
         finalParts.push(extractedQuestion);
     }
 
+    const statementText = finalParts.slice(0, Math.max(0, finalParts.length - 1)).join('. ').trim();
+    const statementOut = statementText ? (/[.!?]$/.test(statementText) ? statementText : `${statementText}.`) : '';
+    const questionOut = extractedQuestion ? String(extractedQuestion).trim() : '';
+    const combined = [statementOut, questionOut].filter(Boolean).join(' ').trim();
+
     return {
-        text: finalParts.join(' ').trim(),
+        text: combined || statementOut || questionOut,
         question: extractedQuestion,
-        aside: usedAside
+        aside: null
     };
 }
 
