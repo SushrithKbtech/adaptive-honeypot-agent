@@ -311,6 +311,7 @@ class AdaptiveHoneypotAgent {
       org: ["What is the company name?", "Sir, which organization is this?"],
       documents: ["What documents do you need?", "Sir, is PAN or Aadhaar required?"],
       officer: ["What is the officer's name?", "Sir, who is the handling officer?"],
+      supervisor: ["Can you share your supervisor's name?", "Sir, who is your reporting manager?"],
       address: ["Where is your office located?", "Sir, can you share the branch address?"]
     };
     return variants[topic] || [`Can you tell me more about ${topic}?`];

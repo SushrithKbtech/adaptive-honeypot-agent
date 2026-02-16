@@ -88,7 +88,9 @@ function getOrCreateSession(sessionId) {
             scamDetected: false,
             scamType: 'unknown',
             turnCount: 0,
-            askedQuestions: []  // Track questions to prevent repetition
+            askedQuestions: [],  // Track questions to prevent repetition
+            askedTopics: [],     // Track question topics to prevent repeats
+            usedAsides: []       // Track asides to reduce repetition
         });
     }
     return activeSessions.get(sessionId);
@@ -140,7 +142,7 @@ function mergeIntelligence(existing, newData) {
 // ============================================================================
 // HELPER: POST-PROCESS REPLY (1-3 SENTENCES, ONE QUESTION)
 // ============================================================================
-function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []) {
+function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = [], askedTopics = [], usedAsides = []) {
     if (!reply) return { text: "Can you tell me more?", question: "Can you tell me more?" };
 
     const isLinkOrAppContext = /\b(link|url|website|click|download|app|apk)\b/i.test(String(scammerText || ''));
@@ -152,58 +154,80 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
             .map(q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim())
             .filter(Boolean)
     );
+    const normalizedTopics = new Set(
+        (askedTopics || [])
+            .map(t => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim())
+            .filter(Boolean)
+    );
+    const normalizedAsides = new Set(
+        (usedAsides || [])
+            .map(a => String(a || '').toLowerCase().replace(/\s+/g, ' ').trim())
+            .filter(Boolean)
+    );
 
     const normalizeQuestion = (q) => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim();
     const isRepeatedQuestion = (q) => normalizedAsked.has(normalizeQuestion(q));
 
-    const fallbackQuestions = {
-        link: [
-            "Can you share the official link again?",
-            "Which website should I open exactly?",
-            "Is there a safe official portal I can use instead?"
-        ],
-        payment: [
-            "What is the exact amount and reference number?",
-            "Which account or UPI should I use to pay?",
-            "Can you share a payment reference or transaction ID?"
-        ],
-        identity: [
-            "What is your full name and employee ID?",
-            "Which department are you calling from?",
-            "Can you share an official email address?"
-        ],
-        lottery: [
-            "Which company is running this lottery?",
-            "What is the claim ID for this prize?",
-            "Is there a helpline number to verify this?"
-        ],
-        general: [
-            "Can you share a reference number for this?",
-            "Who should I contact to verify this?",
-            "What is the official process for this?"
-        ]
+    const fallbackQuestions = [
+        { topic: 'link', q: "Can you share the official link again?" },
+        { topic: 'link', q: "Which website should I open exactly?" },
+        { topic: 'link', q: "Is there a safe official portal I can use instead?" },
+        { topic: 'payment', q: "What is the exact amount and reference number?" },
+        { topic: 'payment', q: "Which account or UPI should I use to pay?" },
+        { topic: 'payment', q: "Can you share a payment reference or transaction ID?" },
+        { topic: 'identity', q: "What is your full name and employee ID?" },
+        { topic: 'identity', q: "Which department are you calling from?" },
+        { topic: 'identity', q: "Can you share an official email address?" },
+        { topic: 'lottery', q: "Which company is running this lottery?" },
+        { topic: 'lottery', q: "What is the claim ID for this prize?" },
+        { topic: 'lottery', q: "Is there a helpline number to verify this?" },
+        { topic: 'caseid', q: "Can you share a reference number for this?" },
+        { topic: 'verification', q: "Who should I contact to verify this?" },
+        { topic: 'process', q: "What is the official process for this?" }
+    ];
+
+    const detectQuestionTopic = (q) => {
+        const text = String(q || '').toLowerCase();
+        if (/\b(callback|call back|contact number|phone number|mobile number)\b/i.test(text)) return 'callback';
+        if (/\b(employee id|emp id|staff id|id number)\b/i.test(text)) return 'empid';
+        if (/\b(email|email address|email id)\b/i.test(text)) return 'email';
+        if (/\b(department|which department)\b/i.test(text)) return 'dept';
+        if (/\b(link|website|url|portal)\b/i.test(text)) return 'link';
+        if (/\b(upi|account|bank account)\b/i.test(text)) return 'payment';
+        if (/\b(amount|fee|charge|payment)\b/i.test(text)) return 'amount';
+        if (/\b(reference|case id|case number|complaint id|ticket)\b/i.test(text)) return 'caseid';
+        if (/\b(company|organisation|organization|brand)\b/i.test(text)) return 'org';
+        if (/\b(supervisor|manager|senior)\b/i.test(text)) return 'supervisor';
+        if (/\b(name|full name)\b/i.test(text)) return 'name';
+        if (/\b(address|office address|branch address)\b/i.test(text)) return 'address';
+        if (/\b(document|pan|aadhaar|aadhar|kyc)\b/i.test(text)) return 'documents';
+        if (/\b(app|application|apk|download)\b/i.test(text)) return 'app';
+        return 'general';
     };
 
     const pickFallbackQuestion = () => {
         const text = String(scammerText || '').toLowerCase();
-        let pool = fallbackQuestions.general;
+        let preferredTopics = ['general'];
         if (/\b(lottery|prize|winner|reward|lucky draw)\b/i.test(text)) {
-            pool = fallbackQuestions.lottery;
+            preferredTopics = ['lottery', 'org', 'caseid', 'payment', 'link'];
         } else if (/\b(pay|payment|fee|charge|refund|upi|transfer)\b/i.test(text)) {
-            pool = fallbackQuestions.payment;
+            preferredTopics = ['payment', 'amount', 'caseid', 'identity'];
         } else if (isLinkOrAppContext) {
-            pool = fallbackQuestions.link;
+            preferredTopics = ['link', 'identity', 'caseid'];
         } else if (/\b(employee|department|official|staff|id|identity)\b/i.test(text)) {
-            pool = fallbackQuestions.identity;
+            preferredTopics = ['identity', 'email', 'dept', 'caseid'];
         }
 
-        for (const q of pool) {
-            if (!isRepeatedQuestion(q)) return q;
+        const candidates = fallbackQuestions.filter(item => preferredTopics.includes(item.topic) || item.topic === 'caseid' || item.topic === 'verification' || item.topic === 'process');
+        for (const item of candidates) {
+            if (normalizedTopics.has(item.topic)) continue;
+            if (!isRepeatedQuestion(item.q)) return item.q;
         }
-        for (const q of fallbackQuestions.general) {
-            if (!isRepeatedQuestion(q)) return q;
+        for (const item of fallbackQuestions) {
+            if (normalizedTopics.has(item.topic)) continue;
+            if (!isRepeatedQuestion(item.q)) return item.q;
         }
-        return pool[0];
+        return candidates[0]?.q || fallbackQuestions[0].q;
     };
 
     // Split into sentences
@@ -230,20 +254,27 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     const linkAsides = [
         "I'm not that tech savvy, my daughter usually handles links for me",
         "This phone is old, it hangs when I click links",
-        "I get confused with links, I don't want to click the wrong thing"
+        "I get confused with links, I don't want to click the wrong thing",
+        "I don't want to click the wrong link by mistake",
+        "I'm not comfortable opening links from unknown numbers"
     ];
     const generalAsides = [
         "I'm getting a bit confused and trying to understand properly",
         "I'm worried and just want to do this the right way",
-        "I'm trying to follow, but it's not very clear to me"
+        "I'm trying to follow, but it's not very clear to me",
+        "I'm a bit tense, please explain clearly",
+        "I'm just trying to be careful here"
     ];
 
+    let usedAside = null;
     if (statementSentences.length > 1) {
         finalParts.push(statementSentences[1]);
     } else if (shouldElongate) {
         const pool = isLinkOrAppContext ? linkAsides : generalAsides;
-        const aside = pool.length ? pool[(turn || 1) % pool.length] : "";
+        const candidates = pool.filter(a => !normalizedAsides.has(String(a).toLowerCase().replace(/\s+/g, ' ').trim()));
+        const aside = (candidates.length ? candidates : pool)[(turn || 1) % pool.length];
         if (aside) {
+            usedAside = aside;
             finalParts.push(aside);
         }
     }
@@ -255,7 +286,8 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
         ) || questionSentences[0];
 
         extractedQuestion = bestQuestion.includes('?') ? bestQuestion : bestQuestion + '?';
-        if (isRepeatedQuestion(extractedQuestion)) {
+        const topic = detectQuestionTopic(extractedQuestion);
+        if (isRepeatedQuestion(extractedQuestion) || normalizedTopics.has(topic)) {
             extractedQuestion = pickFallbackQuestion();
         }
         finalParts.push(extractedQuestion);
@@ -271,7 +303,8 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
 
     return {
         text: finalParts.join(' ').trim(),
-        question: extractedQuestion
+        question: extractedQuestion,
+        aside: usedAside
     };
 }
 
@@ -477,7 +510,9 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             agentResponse.reply,
             message.text,
             session.turnCount,
-            session.askedQuestions
+            session.askedQuestions,
+            session.askedTopics,
+            session.usedAsides
         );
         const processedReply = processed.text;
         const extractedQuestion = processed.question;
@@ -487,6 +522,37 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             const normalized = extractedQuestion.toLowerCase().replace(/\s+/g, ' ').trim();
             if (normalized && !session.askedQuestions.includes(normalized)) {
                 session.askedQuestions.push(normalized);
+            }
+            const topic = (function detectTopic(q) {
+                const text = String(q || '').toLowerCase();
+                if (/\b(callback|call back|contact number|phone number|mobile number)\b/i.test(text)) return 'callback';
+                if (/\b(employee id|emp id|staff id|id number)\b/i.test(text)) return 'empid';
+                if (/\b(email|email address|email id)\b/i.test(text)) return 'email';
+                if (/\b(department|which department)\b/i.test(text)) return 'dept';
+                if (/\b(link|website|url|portal)\b/i.test(text)) return 'link';
+                if (/\b(upi|account|bank account)\b/i.test(text)) return 'payment';
+                if (/\b(amount|fee|charge|payment)\b/i.test(text)) return 'amount';
+                if (/\b(reference|case id|case number|complaint id|ticket)\b/i.test(text)) return 'caseid';
+                if (/\b(company|organisation|organization|brand)\b/i.test(text)) return 'org';
+                if (/\b(supervisor|manager|senior)\b/i.test(text)) return 'supervisor';
+                if (/\b(name|full name)\b/i.test(text)) return 'name';
+                if (/\b(address|office address|branch address)\b/i.test(text)) return 'address';
+                if (/\b(document|pan|aadhaar|aadhar|kyc)\b/i.test(text)) return 'documents';
+                if (/\b(app|application|apk|download)\b/i.test(text)) return 'app';
+                return 'general';
+            })(extractedQuestion);
+            if (topic && !session.askedTopics.includes(topic)) {
+                session.askedTopics.push(topic);
+            }
+        }
+
+        if (processed.aside) {
+            const normalizedAside = processed.aside.toLowerCase().replace(/\s+/g, ' ').trim();
+            if (normalizedAside && !session.usedAsides.includes(normalizedAside)) {
+                session.usedAsides.push(normalizedAside);
+                if (session.usedAsides.length > 10) {
+                    session.usedAsides.shift();
+                }
             }
         }
 
