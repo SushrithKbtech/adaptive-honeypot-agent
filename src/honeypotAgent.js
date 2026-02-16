@@ -1037,6 +1037,40 @@ You are living inside the scammer’s story—just carefully.`
     }
     intelligence.suspiciousKeywords = [...allKeywords];
 
+    // Add extracted intel fields into suspiciousKeywords (scammer-only source)
+    const keywordFields = [
+      'challanNumbers',
+      'consumerNumbers',
+      'vehicleNumbers',
+      'trackingIds',
+      'caseIds',
+      'employeeIds',
+      'ifscCodes',
+      'transactionIds',
+      'accountLast4',
+      'amounts',
+      'merchantNames',
+      'orgNames',
+      'departmentNames',
+      'supervisorNames',
+      'appNames',
+      'officerNames',
+      'bankAccounts',
+      'upiIds',
+      'phishingLinks'
+    ];
+
+    for (const field of keywordFields) {
+      const values = intelligence[field];
+      if (!Array.isArray(values)) continue;
+      for (const v of values) {
+        const clean = String(v || '').trim();
+        if (clean) allKeywords.add(clean);
+      }
+    }
+
+    intelligence.suspiciousKeywords = [...allKeywords];
+
     return intelligence;
   }
 
@@ -1046,7 +1080,8 @@ You are living inside the scammer’s story—just carefully.`
   async extractIntelligenceWithLLM(conversationHistory, scamType) {
     try {
       const conversation = conversationHistory
-        .map(m => `${m.sender === 'scammer' ? 'SCAMMER' : 'VICTIM'}: ${m.text}`)
+        .filter(m => m.sender === 'scammer')
+        .map(m => `SCAMMER: ${m.text}`)
         .join('\n');
 
       const prompt = `Analyze this scam conversation and extract ALL suspicious keywords, tactics, and manipulation techniques.
