@@ -440,14 +440,44 @@ class AdaptiveHoneypotAgent {
       }
     }
 
-    // Preserve LLM phrasing; only swap the question if needed.
+    // 2. Is the OPENER repetitive? (The "Oh sir, this is alarming" problem)
     let opener = "";
     const originalOpenerEndIndex = reply.indexOf(finalQuestion);
+
     if (originalOpenerEndIndex > 0) {
       opener = reply.substring(0, originalOpenerEndIndex).trim();
     }
 
-    return opener ? `${opener} ${finalQuestion}` : finalQuestion;
+    // Check if opener is "bad" (repetitive keywords like "alarming", "confusing", "concerning")
+    // Or if it matches recent history openers.
+    const isBadOpener = (op) => {
+      const lower = op.toLowerCase();
+      return lower.includes("alarming") || lower.includes("confusing") || lower.includes("concerning") || lower.includes("puzzling");
+    };
+
+    const recentOpeners = conversationHistory
+      .filter(m => m.sender === 'assistant' || m.sender === 'honeypot')
+      .slice(-3)
+      .map(m => m.text.substring(0, 20).toLowerCase());
+
+    const isRepeatedOpener = recentOpeners.some(r => opener.toLowerCase().startsWith(r.substring(0, 10)));
+
+    if (!opener || isBadOpener(opener) || isRepeatedOpener) {
+      // FORCE FRESH OPENER
+      const fresh = this.pickFreshOpener(conversationHistory);
+      // Add some context-aware filller based on new prompt strategy
+      const fillers = [
+        ", this is not seeming right.",
+        ", I am trying only.",
+        ", just tell me one thing.",
+        ", give me clarity.",
+        ", help me na."
+      ];
+      const filler = fillers[Math.floor(Math.random() * fillers.length)];
+      opener = `${fresh}${filler}`;
+    }
+
+    return `${opener} ${finalQuestion}`;
   }
 
   // ============================================================================
