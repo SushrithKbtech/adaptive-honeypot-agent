@@ -413,6 +413,14 @@ class AdaptiveHoneypotAgent {
 
   enforceNonRepetitiveReply(reply, askedTopics, scammerMessage, conversationContext, conversationHistory, scenario = 'bank_fraud', askedQuestions = []) {
     const questionTopics = this.extractQuestionTopics(reply);
+    // Strengthen askedTopics with askedQuestions-derived topics
+    if (askedQuestions && askedQuestions.length > 0) {
+      for (const q of askedQuestions) {
+        for (const t of this.extractQuestionTopics(q || '')) {
+          askedTopics.add(t);
+        }
+      }
+    }
 
     // 1. Is the QUESTION repetitive?
     let finalQuestion = "";
@@ -1434,6 +1442,12 @@ Keywords:`;
   async generateResponse(message, conversationHistory, scamType, turnNumber, askedQuestions = [], extractedIntelligence = {}) {
     // 1. Calculate Topic History (Deterministic)
     const askedTopics = this.buildAskedTopicsFromHistory(conversationHistory);
+    // Merge topics from askedQuestions list to prevent semantic repeats
+    for (const q of askedQuestions || []) {
+      for (const t of this.extractQuestionTopics(q || '')) {
+        askedTopics.add(t);
+      }
+    }
 
     // 2. Persona & Strategy
     const persona = this.scamPatterns[scamType]?.persona || 'concerned_practical';
