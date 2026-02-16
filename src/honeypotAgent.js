@@ -409,7 +409,7 @@ class AdaptiveHoneypotAgent {
     return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
-  enforceNonRepetitiveReply(reply, askedTopics, scammerMessage, conversationContext, conversationHistory, scenario = 'bank_fraud') {
+  enforceNonRepetitiveReply(reply, askedTopics, scammerMessage, conversationContext, conversationHistory, scenario = 'bank_fraud', askedQuestions = []) {
     const questionTopics = this.extractQuestionTopics(reply);
 
     // 1. Is the QUESTION repetitive?
@@ -417,6 +417,9 @@ class AdaptiveHoneypotAgent {
     // If no question asked, pick a new one
     if (questionTopics.size === 0) {
       const recentQs = new Set((conversationHistory || []).map(m => (m.text || '').toLowerCase()));
+      for (const q of askedQuestions || []) {
+        if (q) recentQs.add(String(q).toLowerCase());
+      }
       finalQuestion = this.pickNonRepeatingQuestion(askedTopics, scammerMessage, conversationContext, recentQs, scenario);
     } else {
       // Check overlaps
@@ -424,6 +427,9 @@ class AdaptiveHoneypotAgent {
       if (repeated) {
         // Replacement logic
         const recentQs = new Set((conversationHistory || []).map(m => (m.text || '').toLowerCase()));
+        for (const q of askedQuestions || []) {
+          if (q) recentQs.add(String(q).toLowerCase());
+        }
         finalQuestion = this.pickNonRepeatingQuestion(askedTopics, scammerMessage, conversationContext, recentQs, scenario);
       } else {
         // Keep original question part
@@ -1368,9 +1374,9 @@ ${tacticalInstruction}
 - Turn 1-2: Scared/Surprised.
 - Turn 3+: BUSY/NEGOTIATING. "I am trying to do it, but..."
 - ONE QUESTION ONLY.
+- 1-3 sentences allowed. Sometimes add a short human aside for realism (e.g., not tech savvy).
 - NO REPETITIVE PHRASES. Use a fresh natural reaction.
 - IF THEY GAVE INFO (e.g. Phone), DO NOT ASK FOR IT AGAIN.
-
 TURN ${turnNumber} - Text naturally & TRAP THEM:`;
 
     try {
@@ -1387,7 +1393,7 @@ TURN ${turnNumber} - Text naturally & TRAP THEM:`;
           }
         ],
         temperature: 0.85,
-        max_tokens: 80
+        max_tokens: 120
       });
 
       let response = completion.choices[0].message.content.trim();
@@ -1402,7 +1408,8 @@ TURN ${turnNumber} - Text naturally & TRAP THEM:`;
         message,
         conversationContext,
         conversationHistory,
-        scamType
+        scamType,
+        askedQuestions
       );
 
       // B. Enforce Scenario Voice Prefix (Authenticity) - DISABLED to prevent repetition

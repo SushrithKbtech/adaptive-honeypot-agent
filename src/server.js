@@ -138,10 +138,12 @@ function mergeIntelligence(existing, newData) {
 }
 
 // ============================================================================
-// HELPER: POST-PROCESS REPLY (1-2 SENTENCES, ONE QUESTION)
+// HELPER: POST-PROCESS REPLY (1-3 SENTENCES, ONE QUESTION)
 // ============================================================================
-function postProcessReply(reply) {
+function postProcessReply(reply, scammerText = '') {
     if (!reply) return { text: "Can you tell me more?", question: "Can you tell me more?" };
+
+    const isLinkOrAppContext = /\b(link|url|website|click|download|app|apk)\b/i.test(String(scammerText || ''));
 
     // Split into sentences
     let sentences = reply
@@ -156,12 +158,16 @@ function postProcessReply(reply) {
     // Find non-question sentences
     const statementSentences = sentences.filter(s => !questionSentences.includes(s));
 
-    // Build final reply: max 1 statement + 1 question
+    // Build final reply: up to 2 statements + 1 question (occasionally 3 sentences)
     let finalParts = [];
     let extractedQuestion = null;
 
     if (statementSentences.length > 0) {
         finalParts.push(statementSentences[0]);
+    }
+
+    if (isLinkOrAppContext && statementSentences.length > 1) {
+        finalParts.push(statementSentences[1]);
     }
 
     if (questionSentences.length > 0) {
@@ -391,13 +397,16 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
         );
 
         // Post-process reply to ensure 1-2 sentences with ONE question
-        const processed = postProcessReply(agentResponse.reply);
+        const processed = postProcessReply(agentResponse.reply, message.text);
         const processedReply = processed.text;
         const extractedQuestion = processed.question;
 
         // Track the new question to prevent repetition
-        if (extractedQuestion && !session.askedQuestions.includes(extractedQuestion)) {
-            session.askedQuestions.push(extractedQuestion);
+        if (extractedQuestion) {
+            const normalized = extractedQuestion.toLowerCase().replace(/\s+/g, ' ').trim();
+            if (normalized && !session.askedQuestions.includes(normalized)) {
+                session.askedQuestions.push(normalized);
+            }
         }
 
         // Update session state
