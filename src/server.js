@@ -651,7 +651,10 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
         // Update scam detection
         session.scamDetected = true;
         if (agentResponse.metadata && agentResponse.metadata.scamType) {
-            session.scamType = agentResponse.metadata.scamType;
+            const nextType = agentResponse.metadata.scamType;
+            if (session.scamType === 'unknown' || nextType !== 'bank_fraud') {
+                session.scamType = nextType;
+            }
         }
 
         // Calculate engagement metrics

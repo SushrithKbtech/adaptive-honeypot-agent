@@ -905,6 +905,17 @@ You are living inside the scammer’s story—just carefully.`
       }
     }
 
+    // Additional context-based ID captures (will be cleaned later)
+    const challanContextMatches = allText.match(/\b(?:e-?challan|challan)[\s\w:.-]{0,25}[A-Z]{2,5}-?\d{3,10}\b/gi) || [];
+    if (challanContextMatches.length > 0) {
+      intelligence.challanNumbers.push(...challanContextMatches.map(m => m.trim()));
+    }
+
+    const caseContextMatches = allText.match(/\b(?:case|reference|ref|ticket)[\s\w:.-]{0,25}[A-Z]{2,5}-?\d{3,10}\b/gi) || [];
+    if (caseContextMatches.length > 0) {
+      intelligence.caseIds.push(...caseContextMatches.map(m => m.trim()));
+    }
+
     // Treat any country-code-with-hyphen numbers as phone numbers only
     const ccPhonePattern = /(?:\+?\d{1,3})[-\s]\d{6,14}\b/g;
     const ccPhoneMatches = allText.match(ccPhonePattern) || [];
@@ -990,28 +1001,60 @@ You are living inside the scammer’s story—just carefully.`
       intelligence.phoneNumbers = normalized;
     }
 
-    // Remove phone numbers from bank accounts
+    // Remove phone numbers from bank accounts and other numeric fields
     const phoneDigitSet = new Set();
+    const rawPhoneMatches = allText.match(/(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}\b/g) || [];
+
+    const addPhoneDigits = (value) => {
+      const digits = String(value || '').replace(/\D/g, '');
+      if (!digits) return;
+      phoneDigitSet.add(digits);
+      if (digits.length > 10) phoneDigitSet.add(digits.slice(-10));
+    };
+
+    rawPhoneMatches.forEach(addPhoneDigits);
+
     if (intelligence.phoneNumbers && intelligence.phoneNumbers.length > 0) {
-      for (const p of intelligence.phoneNumbers) {
-        const digits = String(p || '').replace(/\D/g, '');
-        if (!digits) continue;
-        phoneDigitSet.add(digits);
-        if (digits.length > 10) phoneDigitSet.add(digits.slice(-10));
-      }
+      for (const p of intelligence.phoneNumbers) addPhoneDigits(p);
     }
     if (ccPhoneDigits && ccPhoneDigits.length > 0) {
-      for (const digits of ccPhoneDigits) {
-        if (!digits) continue;
-        phoneDigitSet.add(digits);
-        if (digits.length > 10) phoneDigitSet.add(digits.slice(-10));
-      }
+      for (const digits of ccPhoneDigits) addPhoneDigits(digits);
     }
+
     if (phoneDigitSet.size > 0) {
       intelligence.bankAccounts = intelligence.bankAccounts.filter((acc) => {
         const digits = String(acc || '').replace(/\D/g, '');
         return digits && !phoneDigitSet.has(digits);
       });
+      intelligence.consumerNumbers = intelligence.consumerNumbers.filter((num) => {
+        const digits = String(num || '').replace(/\D/g, '');
+        return digits && !phoneDigitSet.has(digits);
+      });
+    }
+
+    const normalizeIdList = (list, requireDigit = true) => {
+      if (!Array.isArray(list)) return [];
+      const out = [];
+      for (const v of list) {
+        const s = String(v || '').trim();
+        if (!s) continue;
+        const match =
+          s.match(/\b[A-Z]{1,5}[-]?\d{3,10}\b/i) ||
+          s.match(/\b[A-Z0-9-]{5,}\b/i);
+        const cleaned = match ? match[0] : s;
+        if (requireDigit && !/\d/.test(cleaned)) continue;
+        out.push(cleaned);
+      }
+      return [...new Set(out)];
+    };
+
+    intelligence.challanNumbers = normalizeIdList(intelligence.challanNumbers, true);
+    intelligence.employeeIds = normalizeIdList(intelligence.employeeIds, true);
+    intelligence.caseIds = normalizeIdList(intelligence.caseIds, true);
+
+    if (intelligence.challanNumbers.length > 0 || intelligence.caseIds.length > 0) {
+      const idBlock = new Set([...intelligence.challanNumbers, ...intelligence.caseIds]);
+      intelligence.employeeIds = intelligence.employeeIds.filter(id => !idBlock.has(id));
     }
 
     // Extract suspicious keywords (urgency, threats, manipulation tactics)
