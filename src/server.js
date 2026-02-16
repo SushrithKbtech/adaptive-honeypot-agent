@@ -140,10 +140,13 @@ function mergeIntelligence(existing, newData) {
 // ============================================================================
 // HELPER: POST-PROCESS REPLY (1-3 SENTENCES, ONE QUESTION)
 // ============================================================================
-function postProcessReply(reply, scammerText = '') {
+function postProcessReply(reply, scammerText = '', turn = 0) {
     if (!reply) return { text: "Can you tell me more?", question: "Can you tell me more?" };
 
     const isLinkOrAppContext = /\b(link|url|website|click|download|app|apk)\b/i.test(String(scammerText || ''));
+    const isHighRiskContext = /\b(kyc|account|bank|otp|verify|urgent|immediately|blocked|suspended|payment|upi|refund|penalty|fine)\b/i
+        .test(String(scammerText || ''));
+    const shouldElongate = isLinkOrAppContext || isHighRiskContext || (turn > 0 && turn % 3 === 0);
 
     // Split into sentences
     let sentences = reply
@@ -166,8 +169,25 @@ function postProcessReply(reply, scammerText = '') {
         finalParts.push(statementSentences[0]);
     }
 
-    if (isLinkOrAppContext && statementSentences.length > 1) {
+    const linkAsides = [
+        "I'm not that tech savvy, my daughter usually handles links for me",
+        "This phone is old, it hangs when I click links",
+        "I get confused with links, I don't want to click the wrong thing"
+    ];
+    const generalAsides = [
+        "I'm getting a bit confused and trying to understand properly",
+        "I'm worried and just want to do this the right way",
+        "I'm trying to follow, but it's not very clear to me"
+    ];
+
+    if (statementSentences.length > 1) {
         finalParts.push(statementSentences[1]);
+    } else if (shouldElongate) {
+        const pool = isLinkOrAppContext ? linkAsides : generalAsides;
+        const aside = pool.length ? pool[(turn || 1) % pool.length] : "";
+        if (aside) {
+            finalParts.push(aside);
+        }
     }
 
     if (questionSentences.length > 0) {
@@ -397,7 +417,7 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
         );
 
         // Post-process reply to ensure 1-2 sentences with ONE question
-        const processed = postProcessReply(agentResponse.reply, message.text);
+        const processed = postProcessReply(agentResponse.reply, message.text, session.turnCount);
         const processedReply = processed.text;
         const extractedQuestion = processed.question;
 
