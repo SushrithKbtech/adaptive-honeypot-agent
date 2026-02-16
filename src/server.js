@@ -146,6 +146,7 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     if (!reply) return { text: "Can you tell me more?", question: "Can you tell me more?" };
 
     const isLinkOrAppContext = /\b(link|url|website|click|download|app|apk)\b/i.test(String(scammerText || ''));
+    const shouldElongate = isLinkOrAppContext || (turn > 0 && turn % 3 === 0);
     const normalizedAsked = new Set(
         (askedQuestions || [])
             .map(q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim())
@@ -285,12 +286,9 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     let finalParts = [];
     let extractedQuestion = null;
 
-    if (statementSentences.length > 0) {
-        finalParts.push(statementSentences[0]);
-    }
-
-    if (statementSentences.length > 1) {
-        finalParts.push(statementSentences[1]);
+    const maxStatements = shouldElongate ? 3 : 2;
+    for (let i = 0; i < Math.min(statementSentences.length, maxStatements); i += 1) {
+        finalParts.push(statementSentences[i]);
     }
 
     if (questionSentences.length > 0) {

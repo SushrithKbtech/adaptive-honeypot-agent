@@ -1554,7 +1554,7 @@ TURN ${turnNumber} - Text naturally & TRAP THEM:`;
           }
         ],
         temperature: 0.85,
-        max_tokens: 160
+        max_tokens: 220
       });
 
       let response = completion.choices[0].message.content.trim();
