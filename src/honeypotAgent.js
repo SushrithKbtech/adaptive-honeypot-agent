@@ -77,7 +77,8 @@ class AdaptiveHoneypotAgent {
     this.extractionPatterns = {
       phoneNumbers: [
         /(?:\+91[\s-]?)?[6-9]\d{9}\b/g,
-        /(?:\+91)?[6-9]\d{2}[\s-]?\d{3}[\s-]?\d{4}\b/g
+        /(?:\+91)?[6-9]\d{2}[\s-]?\d{3}[\s-]?\d{4}\b/g,
+        /(?:\+?\d{1,3})[-\s]\d{6,14}\b/g
       ],
       upiIds: [
         /[a-zA-Z0-9._-]+@[a-zA-Z]{3,}/g, // Standard UPI
@@ -904,6 +905,14 @@ You are living inside the scammer’s story—just carefully.`
       }
     }
 
+    // Treat any country-code-with-hyphen numbers as phone numbers only
+    const ccPhonePattern = /(?:\+?\d{1,3})[-\s]\d{6,14}\b/g;
+    const ccPhoneMatches = allText.match(ccPhonePattern) || [];
+    if (ccPhoneMatches.length > 0) {
+      intelligence.phoneNumbers.push(...ccPhoneMatches.map(m => m.trim()));
+    }
+    const ccPhoneDigits = ccPhoneMatches.map(m => m.replace(/\D/g, '')).filter(Boolean);
+
     // Special handling for amounts (₹ symbols, numbers with lakh/crore)
     const amountPatterns = [
       /₹[\s]?[\d,]+(?:\s?(?:lakh|crore))?/gi,
@@ -944,6 +953,14 @@ You are living inside the scammer’s story—just carefully.`
       if (Array.isArray(intelligence[key])) {
         intelligence[key] = [...new Set(intelligence[key])].filter(v => v && v.trim().length > 0);
       }
+    }
+
+    // Remove country-code phone numbers from bank accounts
+    if (ccPhoneDigits && ccPhoneDigits.length > 0) {
+      intelligence.bankAccounts = intelligence.bankAccounts.filter((acc) => {
+        const digits = String(acc || '').replace(/\D/g, '');
+        return digits && !ccPhoneDigits.includes(digits);
+      });
     }
 
     // Extract suspicious keywords (urgency, threats, manipulation tactics)
@@ -1597,3 +1614,5 @@ Keep it professional and concise.`;
 // EXPORT
 // ============================================================================
 module.exports = AdaptiveHoneypotAgent;
+
+
