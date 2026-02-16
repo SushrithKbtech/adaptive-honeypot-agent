@@ -1,12 +1,12 @@
 # Honeypot API
 
 ## Description
-Adaptive honeypot agent that detects scam patterns, keeps the scammer engaged, and extracts actionable intelligence. The repo includes a Node.js API and a lightweight Python reference API for environments that prefer FastAPI.
+Adaptive honeypot agent that detects scam patterns, keeps the scammer engaged, and extracts actionable intelligence. This repo provides a Node.js API implementation.
 
 ## Tech Stack
-- **Language/Framework:** Node.js (Express.js), Python (FastAPI)
-- **Key Libraries:** OpenAI SDK (Node), FastAPI, Pydantic
-- **LLM/AI Models:** GPT-4o-mini (Node implementation)
+- **Language/Framework:** Node.js (Express.js)
+- **Key Libraries:** OpenAI SDK, Express, Axios
+- **LLM/AI Models:** GPT-4o-mini
 
 ## Setup Instructions
 1. Clone the repository
@@ -18,12 +18,6 @@ Adaptive honeypot agent that detects scam patterns, keeps the scammer engaged, a
 1. `npm install`
 2. Create `.env` from `.env.example`
 3. `npm start`
-
-### Python (reference API)
-1. `python -m venv .venv`
-2. `.venv\Scripts\activate`
-3. `pip install -r requirements.txt`
-4. `uvicorn src.main:app --host 0.0.0.0 --port 8000`
 
 ## API Endpoint
 - **URL:** `https://your-deployed-url.com/honeypot`
