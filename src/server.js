@@ -416,6 +416,7 @@ async function sendGuviCallback(sessionData, conversationHistory) {
 
         // Build payload per GUVI spec
         const payload = {
+            status: 'success',
             sessionId: sessionData.sessionId,
             scamDetected: sessionData.scamDetected || true,
             totalMessagesExchanged: sessionData.turnCount * 2,
@@ -677,6 +678,12 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             console.log(`📤 Sending callback to: ${callbackUrl}`);
             await sendCallback(callbackUrl, callbackPayload, API_KEY);
         }
+
+        // Simulate human response time (5-9 seconds)
+        const minDelayMs = 5000;
+        const maxDelayMs = 9000;
+        const delayMs = Math.floor(minDelayMs + Math.random() * (maxDelayMs - minDelayMs + 1));
+        await new Promise(resolve => setTimeout(resolve, delayMs));
 
         const responseTime = Date.now() - startTime;
         console.log(`   Honeypot: ${processedReply}`);

@@ -955,6 +955,41 @@ You are living inside the scammer’s story—just carefully.`
       }
     }
 
+    // Normalize phone numbers: prefer country-code forms when both exist
+    if (intelligence.phoneNumbers && intelligence.phoneNumbers.length > 0) {
+      const phones = intelligence.phoneNumbers;
+      const ccPattern = /^\+?\d{1,3}[-\s]/;
+      const ccByLast10 = new Map();
+
+      for (const p of phones) {
+        const digits = String(p || '').replace(/\D/g, '');
+        if (!digits) continue;
+        const last10 = digits.slice(-10);
+        if (ccPattern.test(String(p))) {
+          if (!ccByLast10.has(last10)) ccByLast10.set(last10, p);
+        }
+      }
+
+      const normalized = [];
+      const seen = new Set();
+      for (const p of phones) {
+        const raw = String(p || '').trim();
+        const digits = raw.replace(/\D/g, '');
+        if (!digits) continue;
+        const last10 = digits.slice(-10);
+        const hasCc = ccPattern.test(raw);
+        if (ccByLast10.has(last10) && !hasCc) {
+          continue; // drop plain number when country-code version exists
+        }
+        const key = (hasCc ? `cc:${last10}` : `n:${digits}`);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalized.push(raw);
+      }
+
+      intelligence.phoneNumbers = normalized;
+    }
+
     // Remove country-code phone numbers from bank accounts
     if (ccPhoneDigits && ccPhoneDigits.length > 0) {
       intelligence.bankAccounts = intelligence.bankAccounts.filter((acc) => {
