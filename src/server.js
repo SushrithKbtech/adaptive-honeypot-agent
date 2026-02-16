@@ -140,13 +140,71 @@ function mergeIntelligence(existing, newData) {
 // ============================================================================
 // HELPER: POST-PROCESS REPLY (1-3 SENTENCES, ONE QUESTION)
 // ============================================================================
-function postProcessReply(reply, scammerText = '', turn = 0) {
+function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []) {
     if (!reply) return { text: "Can you tell me more?", question: "Can you tell me more?" };
 
     const isLinkOrAppContext = /\b(link|url|website|click|download|app|apk)\b/i.test(String(scammerText || ''));
     const isHighRiskContext = /\b(kyc|account|bank|otp|verify|urgent|immediately|blocked|suspended|payment|upi|refund|penalty|fine)\b/i
         .test(String(scammerText || ''));
     const shouldElongate = isLinkOrAppContext || isHighRiskContext || (turn > 0 && turn % 3 === 0);
+    const normalizedAsked = new Set(
+        (askedQuestions || [])
+            .map(q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim())
+            .filter(Boolean)
+    );
+
+    const normalizeQuestion = (q) => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const isRepeatedQuestion = (q) => normalizedAsked.has(normalizeQuestion(q));
+
+    const fallbackQuestions = {
+        link: [
+            "Can you share the official link again?",
+            "Which website should I open exactly?",
+            "Is there a safe official portal I can use instead?"
+        ],
+        payment: [
+            "What is the exact amount and reference number?",
+            "Which account or UPI should I use to pay?",
+            "Can you share a payment reference or transaction ID?"
+        ],
+        identity: [
+            "What is your full name and employee ID?",
+            "Which department are you calling from?",
+            "Can you share an official email address?"
+        ],
+        lottery: [
+            "Which company is running this lottery?",
+            "What is the claim ID for this prize?",
+            "Is there a helpline number to verify this?"
+        ],
+        general: [
+            "Can you share a reference number for this?",
+            "Who should I contact to verify this?",
+            "What is the official process for this?"
+        ]
+    };
+
+    const pickFallbackQuestion = () => {
+        const text = String(scammerText || '').toLowerCase();
+        let pool = fallbackQuestions.general;
+        if (/\b(lottery|prize|winner|reward|lucky draw)\b/i.test(text)) {
+            pool = fallbackQuestions.lottery;
+        } else if (/\b(pay|payment|fee|charge|refund|upi|transfer)\b/i.test(text)) {
+            pool = fallbackQuestions.payment;
+        } else if (isLinkOrAppContext) {
+            pool = fallbackQuestions.link;
+        } else if (/\b(employee|department|official|staff|id|identity)\b/i.test(text)) {
+            pool = fallbackQuestions.identity;
+        }
+
+        for (const q of pool) {
+            if (!isRepeatedQuestion(q)) return q;
+        }
+        for (const q of fallbackQuestions.general) {
+            if (!isRepeatedQuestion(q)) return q;
+        }
+        return pool[0];
+    };
 
     // Split into sentences
     let sentences = reply
@@ -197,19 +255,17 @@ function postProcessReply(reply, scammerText = '', turn = 0) {
         ) || questionSentences[0];
 
         extractedQuestion = bestQuestion.includes('?') ? bestQuestion : bestQuestion + '?';
+        if (isRepeatedQuestion(extractedQuestion)) {
+            extractedQuestion = pickFallbackQuestion();
+        }
         finalParts.push(extractedQuestion);
     } else if (finalParts.length === 0) {
         // No question found, create one
-        extractedQuestion = "Can you please tell me more about this?";
+        extractedQuestion = pickFallbackQuestion();
         finalParts.push(extractedQuestion);
     } else {
-        // Add a generic question if only statement exists
-        const genericQuestions = [
-            "Can you verify this for me?",
-            "How should I proceed?",
-            "What do I need to do?"
-        ];
-        extractedQuestion = genericQuestions[Math.floor(Math.random() * genericQuestions.length)];
+        // Add a context-aware question if only statement exists
+        extractedQuestion = pickFallbackQuestion();
         finalParts.push(extractedQuestion);
     }
 
@@ -417,7 +473,12 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
         );
 
         // Post-process reply to ensure 1-2 sentences with ONE question
-        const processed = postProcessReply(agentResponse.reply, message.text, session.turnCount);
+        const processed = postProcessReply(
+            agentResponse.reply,
+            message.text,
+            session.turnCount,
+            session.askedQuestions
+        );
         const processedReply = processed.text;
         const extractedQuestion = processed.question;
 
