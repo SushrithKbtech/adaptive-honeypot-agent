@@ -146,7 +146,7 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     if (!reply) return { text: "Can you tell me more?", question: "Can you tell me more?" };
 
     const isLinkOrAppContext = /\b(link|url|website|click|download|app|apk)\b/i.test(String(scammerText || ''));
-    const shouldElongate = isLinkOrAppContext || (turn > 0 && turn % 3 === 0);
+    const shouldElongate = isLinkOrAppContext || (turn > 0 && turn % 2 === 0);
     const normalizedAsked = new Set(
         (askedQuestions || [])
             .map(q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim())
@@ -287,6 +287,25 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     let extractedQuestion = null;
 
     const maxStatements = shouldElongate ? 3 : 2;
+
+    // Ensure first turn starts with a brief shocked reaction before any question.
+    if (turn === 1) {
+        const textLc = String(scammerText || '').toLowerCase();
+        let shock = "Oh no, this is unexpected.";
+        if (/\b(kyc|bank|account|sbi|blocked|suspended|fraud|otp)\b/i.test(textLc)) {
+            shock = "Oh no, this is scary. I was not expecting a bank alert.";
+        } else if (/\b(challan|traffic|fine|police|rto|vehicle)\b/i.test(textLc)) {
+            shock = "Oh no, this is a shock. I did not expect any challan.";
+        } else if (/\b(lottery|prize|winner|reward|lucky draw)\b/i.test(textLc)) {
+            shock = "Oh wow, I am surprised. I never expected a prize like this.";
+        } else if (/\b(delivery|parcel|courier|package|tracking)\b/i.test(textLc)) {
+            shock = "Oh, this is unexpected. I was not waiting for any parcel.";
+        } else if (/\b(electricity|power|bill|disconnected)\b/i.test(textLc)) {
+            shock = "Oh no, this is worrying. I paid my bill recently.";
+        }
+        finalParts.push(shock);
+    }
+
     for (let i = 0; i < Math.min(statementSentences.length, maxStatements); i += 1) {
         finalParts.push(statementSentences[i]);
     }
