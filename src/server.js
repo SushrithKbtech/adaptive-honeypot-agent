@@ -169,32 +169,48 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     const isRepeatedQuestion = (q) => normalizedAsked.has(normalizeQuestion(q));
 
     const fallbackQuestions = [
+        { topic: 'callback', q: "Can you share a callback number?" },
+        { topic: 'callback', q: "Is there a helpline number I can call?" },
+        { topic: 'empid', q: "What is your employee ID?" },
+        { topic: 'name', q: "What is your full name?" },
+        { topic: 'dept', q: "Which department are you calling from?" },
+        { topic: 'email', q: "Can you share an official email address?" },
+        { topic: 'org', q: "Which company is this from?" },
+        { topic: 'supervisor', q: "Can you share your supervisor's name?" },
+        { topic: 'address', q: "Where is your office located?" },
+        { topic: 'documents', q: "What documents do you need from me?" },
         { topic: 'link', q: "Can you share the official link again?" },
         { topic: 'link', q: "Which website should I open exactly?" },
         { topic: 'link', q: "Is there a safe official portal I can use instead?" },
-        { topic: 'payment', q: "What is the exact amount and reference number?" },
         { topic: 'payment', q: "Which account or UPI should I use to pay?" },
-        { topic: 'payment', q: "Can you share a payment reference or transaction ID?" },
-        { topic: 'identity', q: "What is your full name and employee ID?" },
-        { topic: 'identity', q: "Which department are you calling from?" },
-        { topic: 'identity', q: "Can you share an official email address?" },
+        { topic: 'amount', q: "What is the exact amount involved?" },
+        { topic: 'txnid', q: "Can you share the transaction or reference ID?" },
+        { topic: 'merchant', q: "Who is the merchant or beneficiary name?" },
+        { topic: 'caseid', q: "Can you share a case or reference number?" },
+        { topic: 'process', q: "What is the official process for this?" },
+        { topic: 'verification', q: "Who should I contact to verify this?" },
         { topic: 'lottery', q: "Which company is running this lottery?" },
         { topic: 'lottery', q: "What is the claim ID for this prize?" },
-        { topic: 'lottery', q: "Is there a helpline number to verify this?" },
-        { topic: 'caseid', q: "Can you share a reference number for this?" },
-        { topic: 'verification', q: "Who should I contact to verify this?" },
-        { topic: 'process', q: "What is the official process for this?" }
+        { topic: 'platform', q: "Which website or app is this for?" },
+        { topic: 'orderid', q: "What is the order or ticket ID?" },
+        { topic: 'tracking', q: "What is the tracking number?" },
+        { topic: 'challan', q: "What is the challan or violation number?" },
+        { topic: 'consumer', q: "What is the consumer or CA number?" },
+        { topic: 'officer', q: "Who is the handling officer?" },
+        { topic: 'app', q: "Which app should I download exactly?" }
     ];
 
     const detectQuestionTopic = (q) => {
         const text = String(q || '').toLowerCase();
-        if (/\b(callback|call back|contact number|phone number|mobile number)\b/i.test(text)) return 'callback';
+        if (/\b(callback|call back|contact number|phone number|mobile number|helpline|desk number)\b/i.test(text)) return 'callback';
         if (/\b(employee id|emp id|staff id|id number)\b/i.test(text)) return 'empid';
         if (/\b(email|email address|email id)\b/i.test(text)) return 'email';
         if (/\b(department|which department)\b/i.test(text)) return 'dept';
         if (/\b(link|website|url|portal)\b/i.test(text)) return 'link';
         if (/\b(upi|account|bank account)\b/i.test(text)) return 'payment';
         if (/\b(amount|fee|charge|payment)\b/i.test(text)) return 'amount';
+        if (/\b(transaction id|txn id|txnid)\b/i.test(text)) return 'txnid';
+        if (/\b(merchant|beneficiary)\b/i.test(text)) return 'merchant';
         if (/\b(reference|case id|case number|complaint id|ticket)\b/i.test(text)) return 'caseid';
         if (/\b(company|organisation|organization|brand)\b/i.test(text)) return 'org';
         if (/\b(supervisor|manager|senior)\b/i.test(text)) return 'supervisor';
@@ -202,20 +218,45 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
         if (/\b(address|office address|branch address)\b/i.test(text)) return 'address';
         if (/\b(document|pan|aadhaar|aadhar|kyc)\b/i.test(text)) return 'documents';
         if (/\b(app|application|apk|download)\b/i.test(text)) return 'app';
+        if (/\b(order id|order number|ticket id|booking id|invoice number)\b/i.test(text)) return 'orderid';
+        if (/\b(tracking|consignment)\b/i.test(text)) return 'tracking';
+        if (/\b(challan|violation)\b/i.test(text)) return 'challan';
+        if (/\b(consumer number|ca number)\b/i.test(text)) return 'consumer';
+        if (/\b(officer)\b/i.test(text)) return 'officer';
+        if (/\b(verify|verification|confirm)\b/i.test(text)) return 'verification';
+        if (/\b(process|procedure)\b/i.test(text)) return 'process';
+        if (/\b(lottery|prize|lucky draw)\b/i.test(text)) return 'lottery';
+        if (/\b(website|app|platform)\b/i.test(text)) return 'platform';
         return 'general';
     };
 
     const pickFallbackQuestion = () => {
         const text = String(scammerText || '').toLowerCase();
-        let preferredTopics = ['general'];
-        if (/\b(lottery|prize|winner|reward|lucky draw)\b/i.test(text)) {
-            preferredTopics = ['lottery', 'org', 'caseid', 'payment', 'link'];
+        let preferredTopics = ['caseid', 'process', 'verification'];
+        if (/\b(challan|traffic|violation)\b/i.test(text)) {
+            preferredTopics = ['challan', 'amount', 'dept', 'officer', 'caseid', 'link'];
+        } else if (/\b(electricity|power|consumer)\b/i.test(text)) {
+            preferredTopics = ['consumer', 'amount', 'dept', 'officer', 'caseid', 'link'];
+        } else if (/\b(delivery|courier|parcel|tracking|shipment)\b/i.test(text)) {
+            preferredTopics = ['tracking', 'org', 'amount', 'link', 'caseid', 'callback'];
+        } else if (/\b(order|refund|return|cancel|amazon|flipkart|myntra|meesho|ecommerce)\b/i.test(text)) {
+            preferredTopics = ['platform', 'orderid', 'amount', 'callback', 'email', 'caseid'];
+        } else if (/\b(job|offer|hr|interview|salary)\b/i.test(text)) {
+            preferredTopics = ['org', 'email', 'callback', 'dept', 'name', 'caseid'];
+        } else if (/\b(investment|trading|crypto|returns|profit)\b/i.test(text)) {
+            preferredTopics = ['org', 'amount', 'payment', 'link', 'callback', 'caseid'];
+        } else if (/\b(tax|itr|refund)\b/i.test(text)) {
+            preferredTopics = ['amount', 'caseid', 'link', 'payment', 'org', 'email'];
+        } else if (/\b(anydesk|teamviewer|remote|apk|install)\b/i.test(text)) {
+            preferredTopics = ['app', 'link', 'empid', 'org', 'caseid'];
+        } else if (/\b(lottery|prize|winner|reward|lucky draw)\b/i.test(text)) {
+            preferredTopics = ['lottery', 'org', 'caseid', 'amount', 'payment', 'link', 'callback'];
         } else if (/\b(pay|payment|fee|charge|refund|upi|transfer)\b/i.test(text)) {
-            preferredTopics = ['payment', 'amount', 'caseid', 'identity'];
+            preferredTopics = ['payment', 'amount', 'txnid', 'merchant', 'caseid', 'callback'];
         } else if (isLinkOrAppContext) {
-            preferredTopics = ['link', 'identity', 'caseid'];
+            preferredTopics = ['link', 'callback', 'email', 'dept', 'caseid'];
         } else if (/\b(employee|department|official|staff|id|identity)\b/i.test(text)) {
-            preferredTopics = ['identity', 'email', 'dept', 'caseid'];
+            preferredTopics = ['empid', 'dept', 'email', 'name', 'org', 'supervisor'];
         }
 
         const candidates = fallbackQuestions.filter(item => preferredTopics.includes(item.topic) || item.topic === 'caseid' || item.topic === 'verification' || item.topic === 'process');
@@ -525,13 +566,15 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             }
             const topic = (function detectTopic(q) {
                 const text = String(q || '').toLowerCase();
-                if (/\b(callback|call back|contact number|phone number|mobile number)\b/i.test(text)) return 'callback';
+                if (/\b(callback|call back|contact number|phone number|mobile number|helpline|desk number)\b/i.test(text)) return 'callback';
                 if (/\b(employee id|emp id|staff id|id number)\b/i.test(text)) return 'empid';
                 if (/\b(email|email address|email id)\b/i.test(text)) return 'email';
                 if (/\b(department|which department)\b/i.test(text)) return 'dept';
                 if (/\b(link|website|url|portal)\b/i.test(text)) return 'link';
                 if (/\b(upi|account|bank account)\b/i.test(text)) return 'payment';
                 if (/\b(amount|fee|charge|payment)\b/i.test(text)) return 'amount';
+                if (/\b(transaction id|txn id|txnid)\b/i.test(text)) return 'txnid';
+                if (/\b(merchant|beneficiary)\b/i.test(text)) return 'merchant';
                 if (/\b(reference|case id|case number|complaint id|ticket)\b/i.test(text)) return 'caseid';
                 if (/\b(company|organisation|organization|brand)\b/i.test(text)) return 'org';
                 if (/\b(supervisor|manager|senior)\b/i.test(text)) return 'supervisor';
@@ -539,6 +582,15 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
                 if (/\b(address|office address|branch address)\b/i.test(text)) return 'address';
                 if (/\b(document|pan|aadhaar|aadhar|kyc)\b/i.test(text)) return 'documents';
                 if (/\b(app|application|apk|download)\b/i.test(text)) return 'app';
+                if (/\b(order id|order number|ticket id|booking id|invoice number)\b/i.test(text)) return 'orderid';
+                if (/\b(tracking|consignment)\b/i.test(text)) return 'tracking';
+                if (/\b(challan|violation)\b/i.test(text)) return 'challan';
+                if (/\b(consumer number|ca number)\b/i.test(text)) return 'consumer';
+                if (/\b(officer)\b/i.test(text)) return 'officer';
+                if (/\b(verify|verification|confirm)\b/i.test(text)) return 'verification';
+                if (/\b(process|procedure)\b/i.test(text)) return 'process';
+                if (/\b(lottery|prize|lucky draw)\b/i.test(text)) return 'lottery';
+                if (/\b(website|app|platform)\b/i.test(text)) return 'platform';
                 return 'general';
             })(extractedQuestion);
             if (topic && !session.askedTopics.includes(topic)) {
