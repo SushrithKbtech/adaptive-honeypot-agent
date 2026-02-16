@@ -419,6 +419,7 @@ async function sendGuviCallback(sessionData, conversationHistory) {
             status: 'success',
             sessionId: sessionData.sessionId,
             scamDetected: sessionData.scamDetected || true,
+            scamType: sessionData.scamType || 'unknown',
             totalMessagesExchanged: sessionData.turnCount * 2,
             extractedIntelligence: {
                 bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
@@ -660,6 +661,7 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
                 : {
                     status: 'success',
                     reply: processedReply,
+                    scamType: session.scamType,
                     scamDetected: session.scamDetected,
                     extractedIntelligence: {
                         phoneNumbers: session.extractedIntelligence.phoneNumbers,

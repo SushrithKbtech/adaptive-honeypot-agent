@@ -990,11 +990,27 @@ You are living inside the scammer’s story—just carefully.`
       intelligence.phoneNumbers = normalized;
     }
 
-    // Remove country-code phone numbers from bank accounts
+    // Remove phone numbers from bank accounts
+    const phoneDigitSet = new Set();
+    if (intelligence.phoneNumbers && intelligence.phoneNumbers.length > 0) {
+      for (const p of intelligence.phoneNumbers) {
+        const digits = String(p || '').replace(/\D/g, '');
+        if (!digits) continue;
+        phoneDigitSet.add(digits);
+        if (digits.length > 10) phoneDigitSet.add(digits.slice(-10));
+      }
+    }
     if (ccPhoneDigits && ccPhoneDigits.length > 0) {
+      for (const digits of ccPhoneDigits) {
+        if (!digits) continue;
+        phoneDigitSet.add(digits);
+        if (digits.length > 10) phoneDigitSet.add(digits.slice(-10));
+      }
+    }
+    if (phoneDigitSet.size > 0) {
       intelligence.bankAccounts = intelligence.bankAccounts.filter((acc) => {
         const digits = String(acc || '').replace(/\D/g, '');
-        return digits && !ccPhoneDigits.includes(digits);
+        return digits && !phoneDigitSet.has(digits);
       });
     }
 
