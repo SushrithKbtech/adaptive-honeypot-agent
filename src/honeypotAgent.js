@@ -337,59 +337,59 @@ class AdaptiveHoneypotAgent {
 
   pickFreshOpener(conversationHistory) {
     const openers = [
-// Confused / processing
-  "Actually",
-  "One minute",
-  "Wait",
-  "Just a second",
-  "I'm not understanding this",
-  "This is confusing",
-  "I'm getting worried",
-  "This is sudden",
-  "I'm trying to understand",
-  "Let me check once",
+      // Confused / processing
+      "Actually",
+      "One minute",
+      "Wait",
+      "Just a second",
+      "I'm not understanding this",
+      "This is confusing",
+      "I'm getting worried",
+      "This is sudden",
+      "I'm trying to understand",
+      "Let me check once",
 
-  // Hesitation / delay (very human)
-  "Before that",
-  "Hold on",
-  "Just checking",
-  "Let me see",
-  "One small doubt",
-  "I have one doubt",
-  "Just tell me one thing",
-  "Let me confirm this",
+      // Hesitation / delay (very human)
+      "Before that",
+      "Hold on",
+      "Just checking",
+      "Let me see",
+      "One small doubt",
+      "I have one doubt",
+      "Just tell me one thing",
+      "Let me confirm this",
 
-  // Cooperative but cautious
-  "Okay but",
-  "I'm trying to do this",
-  "I'm following what you said",
-  "I'm doing as told",
-  "I'm checking now",
-  "I'm trying from my side",
-  "I'm doing it now",
+      // Cooperative but cautious
+      "Okay but",
+      "I'm trying to do this",
+      "I'm following what you said",
+      "I'm doing as told",
+      "I'm checking now",
+      "I'm trying from my side",
+      "I'm doing it now",
 
-  // Natural Indian fillers (VERY realistic)
-  "Actually see",
-  "Means",
-  "Basically",
-  "One thing",
-  "Just tell me",
-  "Listen",
-  "See",
+      // Natural Indian fillers (VERY realistic)
+      "Actually see",
+      "Means",
+      "Basically",
+      "One thing",
+      "Just tell me",
+      "Listen",
+      "See",
 
-  // Emotional but controlled (use sparingly)
-  "Ayyo wait",
-  "This is worrying",
-  "I'm getting scared",
-  "This is unexpected",
-  "Oh",
+      // Emotional but controlled (use sparingly)
+      "Ayyo wait",
+      "This is worrying",
+      "I'm getting scared",
+      "This is unexpected",
+      "Oh",
 
-  // Calm verification phase
-  "Let me verify once",
-  "Before proceeding",
-  "Just to be safe",
-  "I'm double checking",
-  "Let me confirm properly"
+      // Calm verification phase
+      "Let me verify once",
+      "Before proceeding",
+      "Just to be safe",
+      "I'm double checking",
+      "Let me confirm properly"
     ];
 
     // Get last 3 agent messages
@@ -1333,12 +1333,20 @@ To get intelligence, you must OFFER something (compliance, money, trust) but put
 - To get Employee ID -> "My uncle (police) is asking for ID to verify before I pay."
 - To get Callback -> "Battery is 2%. Give number quickly."
 
-🚫 CRITICAL RULES TO FIX REPETITION & WEAKNESS:
-1. NEVER start every message with "Oh sir, this is alarming". VARY YOUR OPENERS!
-   - Use: "Ayyo sir", "Actually sir", "One minute", "Wait", "God...", "Sir please".
-2. STOP saying "I'm not understanding" every time. Say "The link is not opening", "It shows error", "I am confused about X".
-3. NEVER ASK: "What do I need to do?", "How should I proceed?", "Can you verify this?".
-   - THESE ARE BANNED. Instead, ask for SPECIFIC details (UPI, ID, Email).
+🚫 CRITICAL RULES TO FIX REPETITION:
+1. BRIDGE & REACT (THE "HUMAN" TOUCH):
+   - NEVER just ask a question. ALWAYS react first.
+   - Money/Penalty? -> React: "₹500?! That is too much!" or "₹25 Lakhs? I am rich!"
+   - Threat? -> React: "Police?? I am scared sir!" or "Blocked?? But why?"
+   - BRIDGE: "₹500 is big amount sir... (Bridge) ... but what is the exact challan number?"
+
+2. REPETITION TRAP:
+   - IF YOU ALREADY ASKED FOR INFO (like ID, OTP), DO NOT ASK AGAIN.
+   - If they gave it, acknowledge: "Okay I noted it..." then ask NEXT thing.
+   - NEVER ASK "What do I need to do?" or "How should I proceed?". BANNED.
+
+3. VARY YOUR OPENERS! (Don't always use "Sir"):
+   - Use: "Ayyo", "Actually", "One minute", "Wait", "God...", "Please na".
 
 💬 AUTHENTIC EXAMPLES:
 - "Ayyo, why is it asking for password? Bank said never share pwd."
