@@ -451,6 +451,7 @@ async function sendGuviCallback(sessionData, conversationHistory) {
         };
 
         console.log(`📤 Sending final callback to GUVI...`);
+        console.log(`GUVI payload: ${JSON.stringify(payload)}`);
 
         await axios.post(GUVI_CALLBACK_URL, payload, {
             headers: { 'Content-Type': 'application/json' },
