@@ -166,6 +166,75 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     const normalizeQuestion = (q) => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim();
     const isRepeatedQuestion = (q) => normalizedAsked.has(normalizeQuestion(q));
 
+    const hasAsked = (re) => {
+        for (const q of normalizedAsked) {
+            if (re.test(q)) return true;
+        }
+        return false;
+    };
+
+    const missingRequired = [];
+    if (!hasAsked(/\b(phone|callback|contact number|mobile number|call back)\b/i)) missingRequired.push('callback');
+    if (!hasAsked(/\b(upi|upi id|upi handle)\b/i)) missingRequired.push('upi');
+    if (!hasAsked(/\b(bank account|account number|a\/c|account details)\b/i)) missingRequired.push('bank');
+    if (!hasAsked(/\b(link|url|website|portal)\b/i)) missingRequired.push('link');
+    if (!hasAsked(/\b(email|email address|email id)\b/i)) missingRequired.push('email');
+
+    const requiredQuestionMap = {
+        callback: [
+            "Can you share a callback number?",
+            "What is the best phone number to reach you?",
+            "Can you give me a contact number?"
+        ],
+        upi: [
+            "What is your UPI ID?",
+            "Can you share your UPI handle?",
+            "Which UPI ID should I use?"
+        ],
+        bank: [
+            "Can you share the bank account number?",
+            "Which bank account should I use?",
+            "Please send the account number for payment."
+        ],
+        link: [
+            "Can you share the official link?",
+            "Which website should I open exactly?",
+            "Please send the official portal URL."
+        ],
+        email: [
+            "What is your official email address?",
+            "Can you share your email ID?",
+            "Please send the official email."
+        ]
+    };
+
+    const coversRequiredTopic = (topic, text) => {
+        const t = String(text || '');
+        if (topic === 'callback') return /\b(phone|callback|contact number|mobile|call back)\b/i.test(t);
+        if (topic === 'upi') return /\b(upi)\b/i.test(t);
+        if (topic === 'bank') return /\b(bank account|account number|a\/c|account details)\b/i.test(t);
+        if (topic === 'link') return /\b(link|url|website|portal)\b/i.test(t);
+        if (topic === 'email') return /\b(email|email address|email id)\b/i.test(t);
+        return false;
+    };
+
+    const ensureRequiredQuestion = (question) => {
+        if (turn <= 9 && missingRequired.length > 0) {
+            const q = String(question || '');
+            const alreadyCoversMissing = missingRequired.some(topic => coversRequiredTopic(topic, q));
+            if (!alreadyCoversMissing) {
+                const startIndex = (turn - 1) % missingRequired.length;
+                for (let i = 0; i < missingRequired.length; i += 1) {
+                    const topic = missingRequired[(startIndex + i) % missingRequired.length];
+                    const options = requiredQuestionMap[topic] || [];
+                    const pick = options.find(opt => !isRepeatedQuestion(opt)) || options[0];
+                    if (pick) return pick;
+                }
+            }
+        }
+        return question;
+    };
+
     const fallbackQuestions = [
         { topic: 'callback', q: "Can you share a callback number?" },
         { topic: 'callback', q: "Is there a helpline number I can call?" },
@@ -322,14 +391,17 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
         if (isRepeatedQuestion(extractedQuestion) || normalizedTopics.has(topic) || isGeneric) {
             extractedQuestion = pickFallbackQuestion();
         }
+        extractedQuestion = ensureRequiredQuestion(extractedQuestion);
         finalParts.push(extractedQuestion);
     } else if (finalParts.length === 0) {
         // No question found, create one
         extractedQuestion = pickFallbackQuestion();
+        extractedQuestion = ensureRequiredQuestion(extractedQuestion);
         finalParts.push(extractedQuestion);
     } else {
         // Add a context-aware question if only statement exists
         extractedQuestion = pickFallbackQuestion();
+        extractedQuestion = ensureRequiredQuestion(extractedQuestion);
         finalParts.push(extractedQuestion);
     }
 
