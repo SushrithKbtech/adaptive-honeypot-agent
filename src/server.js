@@ -431,6 +431,8 @@ function normalizeFinalPayload(sessionData, agentResponse) {
         scamDetected: sessionData.scamDetected || true,
         totalMessagesExchanged: sessionData.turnCount * 2,
         engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1,
+        scamType: sessionData.llmScamType || 'unknown',
+        confidenceLevel: sessionData.llmConfidenceLevel || 'low',
         extractedIntelligence: {
             phoneNumbers: sessionData.extractedIntelligence.phoneNumbers || [],
             bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
@@ -475,17 +477,33 @@ const GUVI_CALLBACK_URL = 'https://hackathon.guvi.in/api/updateHoneyPotFinalResu
 // ============================================================================
 async function sendGuviCallback(sessionData, conversationHistory) {
     try {
+        let llmScamType = 'unknown';
+        let llmConfidenceLevel = 'low';
+        try {
+            const llmResult = await honeypotAgent.classifyScamTypeLLM(
+                conversationHistory,
+                sessionData.extractedIntelligence
+            );
+            llmScamType = llmResult.scamType || 'unknown';
+            llmConfidenceLevel = llmResult.confidenceLevel || 'low';
+        } catch (error) {
+            console.error('Error classifying scam type with LLM:', error);
+        }
+
+        sessionData.llmScamType = llmScamType;
+        sessionData.llmConfidenceLevel = llmConfidenceLevel;
+
         // Generate LLM-powered agent notes
         let agentNotes;
         try {
             agentNotes = await honeypotAgent.generateAgentNotes(
                 conversationHistory,
                 sessionData.extractedIntelligence,
-                sessionData.scamType
+                llmScamType
             );
         } catch (error) {
             console.error('Error generating agent notes:', error);
-            agentNotes = `${sessionData.scamType} scam detected. Engaged for ${sessionData.turnCount} turns. Extracted intelligence successfully.`;
+            agentNotes = `${llmScamType} scam detected. Engaged for ${sessionData.turnCount} turns. Extracted intelligence successfully.`;
         }
 
         const durationSeconds = Math.round((Date.now() - sessionData.sessionStartMs) / 1000);
@@ -497,6 +515,8 @@ async function sendGuviCallback(sessionData, conversationHistory) {
             scamDetected: sessionData.scamDetected || true,
             totalMessagesExchanged: sessionData.turnCount * 2,
             engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1,
+            scamType: llmScamType,
+            confidenceLevel: llmConfidenceLevel,
             extractedIntelligence: {
                 bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
                 upiIds: sessionData.extractedIntelligence.upiIds || [],

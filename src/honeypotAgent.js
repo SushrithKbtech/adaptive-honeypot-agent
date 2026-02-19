@@ -1603,6 +1603,64 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
     }
   }
 
+  async classifyScamTypeLLM(conversationHistory, extractedIntelligence = {}) {
+    const scammerOnly = conversationHistory
+      .filter(m => m.sender === 'scammer')
+      .map(m => `SCAMMER: ${m.text}`)
+      .join('\n');
+
+    const prompt = `Classify the scam type from the conversation.
+Return ONLY valid JSON with keys: scamType, confidenceLevel.
+
+Allowed scamType values:
+- bank_fraud
+- upi_fraud
+- kyc_update
+- lottery_prize
+- traffic_challan
+- electricity_bill
+- fake_delivery
+- ecommerce
+- investment_scam
+- apk_remote
+- tax_refund
+- phishing
+- other
+
+confidenceLevel: one of "low", "medium", "high".
+
+SCAMMER MESSAGES:
+${scammerOnly}
+
+EXTRACTED INTELLIGENCE:
+${JSON.stringify(extractedIntelligence, null, 2)}`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: 'You are a scam analyst. Output only JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0,
+        max_tokens: 80
+      });
+
+      const raw = completion.choices[0].message.content.trim();
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        return { scamType: 'unknown', confidenceLevel: 'low' };
+      }
+      const parsed = JSON.parse(jsonMatch[0]);
+      const scamType = typeof parsed.scamType === 'string' ? parsed.scamType : 'unknown';
+      const confidenceLevel = typeof parsed.confidenceLevel === 'string' ? parsed.confidenceLevel : 'low';
+      return { scamType, confidenceLevel };
+    } catch (error) {
+      console.error('Scam type LLM classification error:', error);
+      return { scamType: 'unknown', confidenceLevel: 'low' };
+    }
+  }
+
   normalizeAgentNotes(notes, scamType) {
     if (!notes || typeof notes !== 'string') return notes;
 
