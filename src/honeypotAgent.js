@@ -1593,54 +1593,7 @@ TURN ${turnNumber} - Text naturally & TRAP THEM:`;
   // GENERATE AGENT NOTES SUMMARY
   // ============================================================================
   async generateAgentNotes(conversationHistory, extractedIntelligence, scamType) {
-    const fullConversation = conversationHistory
-      .map(m => `${m.sender === 'scammer' ? 'SCAMMER' : 'VICTIM'}: ${m.text} `)
-      .join('\n');
-
-    const prompt = `Analyze this scam conversation and provide a concise summary for law enforcement.
-
-SCAM TYPE: ${scamType}
-
-CONVERSATION:
-${fullConversation}
-
-EXTRACTED INTELLIGENCE:
-${JSON.stringify(extractedIntelligence, null, 2)}
-
-Provide a 2 - 3 sentence summary that includes:
-1. What type of scam this is
-2. Key tactics the scammer used
-3. Most important intelligence gathered
-4. Any red flags or suspicious elements
-
-Keep it professional and concise.`;
-
-    try {
-      const completion = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert in analyzing scam conversations for law enforcement.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 200
-      });
-
-      const raw = completion.choices[0].message.content.trim();
-      return this.normalizeAgentNotes(raw, scamType);
-    } catch (error) {
-      console.error('Agent notes generation error:', error);
-      return this.normalizeAgentNotes(
-        `${scamType} scam detected.Scammer attempted to extract sensitive information.Extracted intelligence includes contact details and payment information.`,
-        scamType
-      );
-    }
+    return this.buildAgentNotesSummary(scamType, extractedIntelligence);
   }
 
   normalizeAgentNotes(notes, scamType) {
@@ -1675,6 +1628,75 @@ Keep it professional and concise.`;
     }
 
     return `This is a ${target} scam. ${notes}`;
+  }
+
+  buildAgentNotesSummary(scamType, extractedIntelligence = {}) {
+    const labels = {
+      bank_fraud: 'bank fraud',
+      upi_fraud: 'UPI fraud',
+      kyc_update: 'KYC update',
+      lottery_prize: 'lottery prize',
+      traffic_challan: 'traffic challan',
+      electricity_bill: 'electricity bill',
+      fake_delivery: 'delivery/courier',
+      ecommerce: 'e-commerce',
+      investment_scam: 'investment scam',
+      apk_remote: 'remote access',
+      tax_refund: 'tax refund'
+    };
+
+    const label = labels[scamType] || 'scam';
+    const flags = [];
+    const keywords = new Set((extractedIntelligence.suspiciousKeywords || []).map(k => String(k).toLowerCase()));
+
+    const hasAny = (list = []) => Array.isArray(list) && list.length > 0;
+    const hasKeyword = (re) => {
+      for (const k of keywords) {
+        if (re.test(k)) return true;
+      }
+      return false;
+    };
+
+    if (hasKeyword(/\b(urgent|immediate|blocked|suspend|penalty|fine|legal action)\b/i)) {
+      flags.push('used urgency/threats');
+    }
+    if (hasKeyword(/\b(otp|pin|password)\b/i)) {
+      flags.push('asked for OTP/PIN');
+    }
+    if (hasAny(extractedIntelligence.phishingLinks)) {
+      flags.push('shared a suspicious link');
+    }
+    if (hasAny(extractedIntelligence.upiIds) || hasAny(extractedIntelligence.bankAccounts)) {
+      flags.push('requested payment details');
+    }
+    if (hasAny(extractedIntelligence.employeeIds) || hasAny(extractedIntelligence.caseIds)) {
+      flags.push('claimed official IDs/reference numbers');
+    }
+
+    const intel = [];
+    if (hasAny(extractedIntelligence.phoneNumbers)) {
+      intel.push(`phone ${extractedIntelligence.phoneNumbers.join(', ')}`);
+    }
+    if (hasAny(extractedIntelligence.upiIds)) {
+      intel.push(`UPI ${extractedIntelligence.upiIds.join(', ')}`);
+    }
+    if (hasAny(extractedIntelligence.phishingLinks)) {
+      intel.push(`link ${extractedIntelligence.phishingLinks.join(', ')}`);
+    }
+    if (hasAny(extractedIntelligence.emailAddresses)) {
+      intel.push(`email ${extractedIntelligence.emailAddresses.join(', ')}`);
+    }
+    if (hasAny(extractedIntelligence.employeeIds)) {
+      intel.push(`ID ${extractedIntelligence.employeeIds.join(', ')}`);
+    }
+    if (hasAny(extractedIntelligence.caseIds)) {
+      intel.push(`ref ${extractedIntelligence.caseIds.join(', ')}`);
+    }
+
+    const redFlags = flags.length > 0 ? flags.join(', ') : 'pressure tactics and verification demands';
+    const intelText = intel.length > 0 ? ` Key intelligence: ${intel.join('; ')}.` : '';
+
+    return `This is a ${label} scam. Red flags include ${redFlags}.${intelText}`.trim();
   }
 
   // ============================================================================
