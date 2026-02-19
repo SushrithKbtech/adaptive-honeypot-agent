@@ -1632,11 +1632,49 @@ Keep it professional and concise.`;
         max_tokens: 200
       });
 
-      return completion.choices[0].message.content.trim();
+      const raw = completion.choices[0].message.content.trim();
+      return this.normalizeAgentNotes(raw, scamType);
     } catch (error) {
       console.error('Agent notes generation error:', error);
-      return `${scamType} scam detected.Scammer attempted to extract sensitive information.Extracted intelligence includes contact details and payment information.`;
+      return this.normalizeAgentNotes(
+        `${scamType} scam detected.Scammer attempted to extract sensitive information.Extracted intelligence includes contact details and payment information.`,
+        scamType
+      );
     }
+  }
+
+  normalizeAgentNotes(notes, scamType) {
+    if (!notes || typeof notes !== 'string') return notes;
+
+    const labels = {
+      bank_fraud: 'bank fraud',
+      upi_fraud: 'UPI fraud',
+      kyc_update: 'KYC update',
+      lottery_prize: 'lottery prize',
+      traffic_challan: 'traffic challan',
+      electricity_bill: 'electricity bill',
+      fake_delivery: 'delivery/courier',
+      ecommerce: 'e-commerce',
+      investment_scam: 'investment scam',
+      apk_remote: 'remote access',
+      tax_refund: 'tax refund'
+    };
+
+    const target = labels[scamType];
+    if (!target) return notes;
+
+    const lower = notes.toLowerCase();
+    if (lower.includes(target.toLowerCase())) return notes;
+
+    const otherLabels = Object.values(labels).filter(l => l !== target);
+    for (const l of otherLabels) {
+      const re = new RegExp(l, 'i');
+      if (re.test(notes)) {
+        return notes.replace(re, target);
+      }
+    }
+
+    return `This is a ${target} scam. ${notes}`;
   }
 
   // ============================================================================
@@ -1718,6 +1756,7 @@ Keep it professional and concise.`;
       const engagementDuration = timestamps.length >= 2
         ? Math.round((Math.max(...timestamps) - Math.min(...timestamps)) / 1000)
         : 0;
+      const safeDuration = engagementDuration > 0 ? engagementDuration : (conversationHistory.length > 0 ? 1 : 0);
 
       // Generate agent notes
       const agentNotes = await this.generateAgentNotes(
@@ -1733,7 +1772,7 @@ Keep it professional and concise.`;
         extractedIntelligence,
         engagementMetrics: {
           totalMessagesExchanged: totalMessages,
-          engagementDurationSeconds: engagementDuration
+          engagementDurationSeconds: safeDuration
         },
         scamType,
         agentNotes
