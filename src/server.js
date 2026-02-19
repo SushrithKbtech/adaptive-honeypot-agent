@@ -430,6 +430,7 @@ function normalizeFinalPayload(sessionData, agentResponse) {
         sessionId: sessionData.sessionId,
         scamDetected: sessionData.scamDetected || true,
         totalMessagesExchanged: sessionData.turnCount * 2,
+        engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1,
         extractedIntelligence: {
             phoneNumbers: sessionData.extractedIntelligence.phoneNumbers || [],
             bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
@@ -487,12 +488,15 @@ async function sendGuviCallback(sessionData, conversationHistory) {
             agentNotes = `${sessionData.scamType} scam detected. Engaged for ${sessionData.turnCount} turns. Extracted intelligence successfully.`;
         }
 
+        const durationSeconds = Math.round((Date.now() - sessionData.sessionStartMs) / 1000);
+
         // Build payload per GUVI spec
         const payload = {
             status: 'success',
             sessionId: sessionData.sessionId,
             scamDetected: sessionData.scamDetected || true,
             totalMessagesExchanged: sessionData.turnCount * 2,
+            engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1,
             extractedIntelligence: {
                 bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
                 upiIds: sessionData.extractedIntelligence.upiIds || [],
