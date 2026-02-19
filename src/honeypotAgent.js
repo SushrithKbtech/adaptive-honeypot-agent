@@ -448,7 +448,7 @@ class AdaptiveHoneypotAgent {
       }
     }
 
-    // 2. Is the OPENER repetitive? (The "Oh sir, this is alarming" problem)
+    // Preserve LLM phrasing; only swap the question if needed.
     let opener = "";
     const originalOpenerEndIndex = reply.indexOf(finalQuestion);
 
@@ -456,36 +456,7 @@ class AdaptiveHoneypotAgent {
       opener = reply.substring(0, originalOpenerEndIndex).trim();
     }
 
-    // Check if opener is "bad" (repetitive keywords like "alarming", "confusing", "concerning")
-    // Or if it matches recent history openers.
-    const isBadOpener = (op) => {
-      const lower = op.toLowerCase();
-      return lower.includes("alarming") || lower.includes("confusing") || lower.includes("concerning") || lower.includes("puzzling");
-    };
-
-    const recentOpeners = conversationHistory
-      .filter(m => m.sender === 'assistant' || m.sender === 'honeypot')
-      .slice(-3)
-      .map(m => m.text.substring(0, 20).toLowerCase());
-
-    const isRepeatedOpener = recentOpeners.some(r => opener.toLowerCase().startsWith(r.substring(0, 10)));
-
-    if (!opener || isBadOpener(opener) || isRepeatedOpener) {
-      // FORCE FRESH OPENER
-      const fresh = this.pickFreshOpener(conversationHistory);
-      // Add some context-aware filller based on new prompt strategy
-      const fillers = [
-        ", this is not seeming right.",
-        ", I am trying only.",
-        ", just tell me one thing.",
-        ", give me clarity.",
-        ", help me na."
-      ];
-      const filler = fillers[Math.floor(Math.random() * fillers.length)];
-      opener = `${fresh}${filler}`;
-    }
-
-    return `${opener} ${finalQuestion}`;
+    return opener ? `${opener} ${finalQuestion}` : finalQuestion;
   }
 
   // ============================================================================
@@ -1593,7 +1564,43 @@ TURN ${turnNumber} - Text naturally & TRAP THEM:`;
   // GENERATE AGENT NOTES SUMMARY
   // ============================================================================
   async generateAgentNotes(conversationHistory, extractedIntelligence, scamType) {
-    return this.buildAgentNotesSummary(scamType, extractedIntelligence);
+    const scammerOnly = conversationHistory
+      .filter(m => m.sender === 'scammer')
+      .map(m => `SCAMMER: ${m.text}`)
+      .join('\n');
+
+    const prompt = `Summarize the conversation in 1-2 natural sentences like a normal chat response.
+
+Include:
+1) What type of scam this is
+2) Why it is a scam (red flags)
+3) The most important intelligence (phone/UPI/link/email/IDs) if present
+
+Keep it concise and natural.
+
+SCAM TYPE: ${scamType}
+SCAMMER MESSAGES:
+${scammerOnly}
+
+EXTRACTED INTELLIGENCE:
+${JSON.stringify(extractedIntelligence, null, 2)}`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: 'You summarize scam conversations in a natural, concise tone.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 120
+      });
+
+      return completion.choices[0].message.content.trim();
+    } catch (error) {
+      console.error('Agent notes generation error:', error);
+      return this.buildAgentNotesSummary(scamType, extractedIntelligence);
+    }
   }
 
   normalizeAgentNotes(notes, scamType) {

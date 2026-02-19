@@ -182,29 +182,29 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
 
     const requiredQuestionMap = {
         callback: [
-            "Can you share a callback number?",
-            "What is the best phone number to reach you?",
-            "Can you give me a contact number?"
+            "If I need to call back, which number should I use?",
+            "Can I have a contact number to verify this?",
+            "What’s the best phone number to reach you?"
         ],
         upi: [
-            "What is your UPI ID?",
-            "Can you share your UPI handle?",
-            "Which UPI ID should I use?"
+            "If I have to pay, which UPI ID should I use?",
+            "Can you share the UPI handle for this?",
+            "Which UPI ID is linked for this payment?"
         ],
         bank: [
-            "Can you share the bank account number?",
-            "Which bank account should I use?",
-            "Please send the account number for payment."
+            "If payment is needed, which bank account should I use?",
+            "Can you share the account number for this?",
+            "Which bank account is this supposed to go to?"
         ],
         link: [
-            "Can you share the official link?",
-            "Which website should I open exactly?",
-            "Please send the official portal URL."
+            "Can you share the official link for this?",
+            "Which website should I open to verify this?",
+            "Please send the correct portal URL."
         ],
         email: [
-            "What is your official email address?",
-            "Can you share your email ID?",
-            "Please send the official email."
+            "What is the official email I should write to?",
+            "Can you share the official email address?",
+            "Which email ID is linked to this?"
         ]
     };
 
@@ -428,7 +428,6 @@ function normalizeFinalPayload(sessionData, agentResponse) {
         status: 'success',
         sessionId: sessionData.sessionId,
         scamDetected: sessionData.scamDetected || true,
-        scamType: sessionData.scamType || 'fraud',
         totalMessagesExchanged: sessionData.turnCount * 2,
         extractedIntelligence: {
             phoneNumbers: sessionData.extractedIntelligence.phoneNumbers || [],
@@ -492,7 +491,6 @@ async function sendGuviCallback(sessionData, conversationHistory) {
             status: 'success',
             sessionId: sessionData.sessionId,
             scamDetected: sessionData.scamDetected || true,
-            scamType: sessionData.scamType || 'unknown',
             totalMessagesExchanged: sessionData.turnCount * 2,
             extractedIntelligence: {
                 bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
@@ -756,7 +754,6 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
                 : {
                     status: 'success',
                     reply: processedReply,
-                    scamType: session.scamType,
                     scamDetected: session.scamDetected,
                     extractedIntelligence: {
                         phoneNumbers: session.extractedIntelligence.phoneNumbers,
