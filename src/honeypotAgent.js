@@ -200,7 +200,7 @@ class AdaptiveHoneypotAgent {
       { key: 'email', regex: /\b(email|e-mail|email address|email id|mail id)\b/i },
       { key: 'ifsc', regex: /\b(ifsc|ifsc code|branch code)\b/i },
       { key: 'empid', regex: /\b(employee id|emp id|staff id)\b/i },
-      { key: 'callback', regex: /\b(callback|call back|callback number|contact number|phone number|mobile number)\b/i },
+      { key: 'callback', regex: /\b(callback|call back|callback number|contact number|phone number|mobile number|number to call|call (?:you|u))\b/i },
       { key: 'address', regex: /\b(branch address|office address|full address|address of|located at)\b/i },
       { key: 'supervisor', regex: /\b(supervisor|manager|senior)\b/i },
       { key: 'txnid', regex: /\b(transaction id|txn id)\b/i },

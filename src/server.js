@@ -1052,12 +1052,26 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             }
             return false;
         };
+        const combinedIntel = agentResponse?.metadata?.extractedIntelligence
+            ? mergeIntelligence({ ...session.extractedIntelligence }, agentResponse.metadata.extractedIntelligence)
+            : session.extractedIntelligence;
+
+        const hasValueForTopicCombined = (topic) => {
+            const intel = combinedIntel || {};
+            if (topic === 'callback') return (intel.callbackNumbers || []).length > 0 || (intel.phoneNumbers || []).length > 0;
+            if (topic === 'upi') return (intel.upiIds || []).length > 0;
+            if (topic === 'bank') return (intel.bankAccounts || []).length > 0;
+            if (topic === 'link') return (intel.phishingLinks || []).length > 0;
+            if (topic === 'email') return (intel.emailAddresses || []).length > 0;
+            return false;
+        };
+
         const missingRequired = [];
-        if (!hasAsked(/\b(phone|callback|contact number|mobile number|call back)\b/i) && !hasValueForTopic('callback')) missingRequired.push('callback');
-        if (!hasAsked(/\b(upi|upi id|upi handle)\b/i) && !hasValueForTopic('upi')) missingRequired.push('upi');
-        if (!hasAsked(/\b(bank account|account number|a\/c|account details)\b/i) && !hasValueForTopic('bank')) missingRequired.push('bank');
-        if (!hasAsked(/\b(link|url|website|portal)\b/i) && !hasValueForTopic('link')) missingRequired.push('link');
-        if (!hasAsked(/\b(email|email address|email id)\b/i) && !hasValueForTopic('email')) missingRequired.push('email');
+        if (!hasAsked(/\b(phone|callback|contact number|mobile number|call back|number to call|call (?:you|u))\b/i) && !hasValueForTopicCombined('callback')) missingRequired.push('callback');
+        if (!hasAsked(/\b(upi|upi id|upi handle)\b/i) && !hasValueForTopicCombined('upi')) missingRequired.push('upi');
+        if (!hasAsked(/\b(bank account|account number|a\/c|account details)\b/i) && !hasValueForTopicCombined('bank')) missingRequired.push('bank');
+        if (!hasAsked(/\b(link|url|website|portal)\b/i) && !hasValueForTopicCombined('link')) missingRequired.push('link');
+        if (!hasAsked(/\b(email|email address|email id)\b/i) && !hasValueForTopicCombined('email')) missingRequired.push('email');
 
         const coversRequiredTopic = (topic, text) => {
             const t = String(text || '');
@@ -1102,7 +1116,7 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
 
         const detectTopic = (q) => {
             const text = String(q || '').toLowerCase();
-            if (/\b(callback|call back|contact number|phone number|mobile number|helpline|desk number)\b/i.test(text)) return 'callback';
+            if (/\b(callback|call back|contact number|phone number|mobile number|helpline|desk number|number to call|call (?:you|u))\b/i.test(text)) return 'callback';
             if (/\b(employee id|emp id|staff id|id number)\b/i.test(text)) return 'empid';
             if (/\b(email|email address|email id)\b/i.test(text)) return 'email';
             if (/\b(department|which department)\b/i.test(text)) return 'dept';
