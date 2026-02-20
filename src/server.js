@@ -542,8 +542,11 @@ function normalizeFinalPayload(sessionData, agentResponse) {
         totalMessagesExchanged: sessionData.turnCount * 2,
         engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1,
         scamType: sessionData.llmScamType || 'unknown',
-        confidenceLevel: sessionData.llmConfidenceLevel || 'low',
+        confidenceLevel: Number.isFinite(sessionData.llmConfidenceLevel)
+            ? sessionData.llmConfidenceLevel
+            : 0,
         redFlags: sessionData.redFlags || [],
+        redFlagsSummary: sessionData.redFlagsSummary || '',
         extractedIntelligence: {
             phoneNumbers: sessionData.extractedIntelligence.phoneNumbers || [],
             bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
@@ -585,20 +588,31 @@ function normalizeFinalPayload(sessionData, agentResponse) {
 // ============================================================================
 const GUVI_CALLBACK_URL = 'https://hackathon.guvi.in/api/updateHoneyPotFinalResult';
 
+function buildRedFlagsSummary(redFlags = []) {
+    if (!Array.isArray(redFlags) || redFlags.length === 0) return '';
+    const pick = redFlags.slice(0, 3);
+    const parts = pick.map(f => {
+        const type = f.type ? f.type.replace(/_/g, ' ') : 'red flag';
+        const evidence = f.evidence ? ` (${f.evidence})` : '';
+        return `${type}${evidence}`;
+    });
+    return `Red flags include ${parts.join(', ')}.`;
+}
+
 // ============================================================================
 // HELPER: SEND CALLBACK TO GUVI
 // ============================================================================
 async function sendGuviCallback(sessionData, conversationHistory) {
     try {
         let llmScamType = 'unknown';
-        let llmConfidenceLevel = 'low';
+        let llmConfidenceLevel = 0;
         try {
             const llmResult = await honeypotAgent.classifyScamTypeLLM(
                 conversationHistory,
                 sessionData.extractedIntelligence
             );
             llmScamType = llmResult.scamType || 'unknown';
-            llmConfidenceLevel = llmResult.confidenceLevel || 'low';
+            llmConfidenceLevel = Number.isFinite(llmResult.confidenceScore) ? llmResult.confidenceScore : 0;
         } catch (error) {
             console.error('Error classifying scam type with LLM:', error);
         }
@@ -634,12 +648,15 @@ async function sendGuviCallback(sessionData, conversationHistory) {
             }
         }
         if (redFlags.length < 5) {
+            const link = (sessionData.extractedIntelligence.phishingLinks || [])[0];
+            const upi = (sessionData.extractedIntelligence.upiIds || [])[0];
+            const email = (sessionData.extractedIntelligence.emailAddresses || [])[0];
             const fillers = [
                 { type: 'urgency', evidence: 'urgent action', severity: 'high' },
-                { type: 'payment_demand', evidence: 'payment requested', severity: 'high' },
                 { type: 'otp_request', evidence: 'OTP/PIN requested', severity: 'critical' },
-                { type: 'authority_claim', evidence: 'official/department claim', severity: 'medium' },
-                { type: 'phishing_link', evidence: 'suspicious link', severity: 'high' }
+                { type: 'payment_demand', evidence: upi ? `UPI requested (${upi})` : 'payment requested', severity: 'high' },
+                { type: 'phishing_link', evidence: link ? `suspicious link (${link})` : 'suspicious link', severity: 'high' },
+                { type: 'authority_claim', evidence: email ? `official email claim (${email})` : 'official/department claim', severity: 'medium' }
             ];
             for (const f of fillers) {
                 if (redFlags.length >= 5) break;
@@ -649,6 +666,8 @@ async function sendGuviCallback(sessionData, conversationHistory) {
                 }
             }
         }
+        const redFlagsSummary = buildRedFlagsSummary(redFlags);
+        sessionData.redFlagsSummary = redFlagsSummary;
         sessionData.redFlags = redFlags;
 
         // Generate LLM-powered agent notes (include red flags)
@@ -677,6 +696,7 @@ async function sendGuviCallback(sessionData, conversationHistory) {
             scamType: llmScamType,
             confidenceLevel: llmConfidenceLevel,
             redFlags: redFlags || [],
+            redFlagsSummary: redFlagsSummary || '',
             extractedIntelligence: {
                 bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
                 upiIds: sessionData.extractedIntelligence.upiIds || [],

@@ -1751,7 +1751,7 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
       .join('\n');
 
     const prompt = `Classify the scam type from the conversation.
-Return ONLY valid JSON with keys: scamType, confidenceLevel.
+Return ONLY valid JSON with keys: scamType, confidenceScore.
 
 Allowed scamType values:
 - bank_fraud
@@ -1768,7 +1768,7 @@ Allowed scamType values:
 - phishing
 - other
 
-confidenceLevel: one of "low", "medium", "high".
+confidenceScore: integer 0-100 (higher = more confident).
 
 Guidance:
 - "lottery_prize" if prize/winner/reward/cashback/processing fee is mentioned.
@@ -1804,15 +1804,17 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
       const raw = completion.choices[0].message.content.trim();
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        return { scamType: 'unknown', confidenceLevel: 'low' };
+        return { scamType: 'unknown', confidenceScore: 0 };
       }
       const parsed = JSON.parse(jsonMatch[0]);
       const scamType = typeof parsed.scamType === 'string' ? parsed.scamType : 'unknown';
-      const confidenceLevel = typeof parsed.confidenceLevel === 'string' ? parsed.confidenceLevel : 'low';
-      return { scamType, confidenceLevel };
+      let confidenceScore = Number(parsed.confidenceScore);
+      if (!Number.isFinite(confidenceScore)) confidenceScore = 0;
+      confidenceScore = Math.max(0, Math.min(100, Math.round(confidenceScore)));
+      return { scamType, confidenceScore };
     } catch (error) {
       console.error('Scam type LLM classification error:', error);
-      return { scamType: 'unknown', confidenceLevel: 'low' };
+      return { scamType: 'unknown', confidenceScore: 0 };
     }
   }
 
@@ -1943,7 +1945,7 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
             [...conversationHistory, { sender: 'scammer', text: message }],
             newIntelligence
           );
-          if (llmType && llmType.scamType && llmType.scamType !== 'other' && llmType.confidenceLevel !== 'low') {
+          if (llmType && llmType.scamType && llmType.scamType !== 'other' && (llmType.confidenceScore || 0) >= 60) {
             scamType = llmType.scamType;
           }
         }
@@ -2009,7 +2011,7 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
       let scamType = this.detectScamType('', conversationHistory);
       try {
         const llmType = await this.classifyScamTypeLLM(conversationHistory, extractedIntelligence);
-        if (llmType && llmType.scamType && llmType.scamType !== 'other' && llmType.confidenceLevel !== 'low') {
+        if (llmType && llmType.scamType && llmType.scamType !== 'other' && (llmType.confidenceScore || 0) >= 60) {
           scamType = llmType.scamType;
         }
       } catch (error) {
