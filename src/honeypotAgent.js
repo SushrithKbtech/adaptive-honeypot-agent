@@ -1701,6 +1701,62 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
     return flags.slice(0, 5);
   }
 
+  // ============================================================================
+  // LLM QUESTION GENERATOR FOR REQUIRED TOPICS (ADAPTIVE, NON-HARDCODED)
+  // ============================================================================
+  async generateTopicQuestionLLM(topic, scamType, scammerMessage = '', conversationHistory = [], askedQuestions = [], askedTopics = []) {
+    try {
+      const topicMap = {
+        callback: 'a callback/contact number',
+        upi: 'a UPI ID/handle',
+        bank: 'a bank account number (if payment/credit is needed)',
+        link: 'the official link/URL/portal',
+        email: 'the official email address',
+        empid: 'an employee/staff ID',
+        caseid: 'a case/reference number',
+        orderid: 'an order/booking ID',
+        tracking: 'a tracking/consignment ID',
+        challan: 'a challan/violation number',
+        consumer: 'a consumer/CA number'
+      };
+
+      const asked = (askedQuestions || []).slice(-12).join(' | ');
+      const askedTopicList = (askedTopics || []).slice(-10).join(', ');
+      const history = (conversationHistory || [])
+        .filter(m => m.sender === 'scammer')
+        .slice(-3)
+        .map(m => `SCAMMER: ${m.text}`)
+        .join('\n');
+
+      const prompt = `Write ONE short, natural WhatsApp-style question to get ${topicMap[topic] || topic}.
+Context: ${scamType}
+Last scammer message: "${scammerMessage}"
+Recent scammer lines:
+${history}
+Already asked topics: ${askedTopicList || 'none'}
+Avoid repeating earlier questions: ${asked || 'none'}
+Rules: 1 question only, keep it short, human, not formal, not support-like.`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: 'You write natural WhatsApp questions for a worried person.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.6,
+        max_tokens: 60
+      });
+
+      let q = completion.choices[0].message.content.trim();
+      q = q.replace(/^(Q:|Question:)\s*/i, '').trim();
+      if (!q.endsWith('?')) q = `${q}?`;
+      return q;
+    } catch (error) {
+      console.error('LLM topic question error:', error);
+      return '';
+    }
+  }
+
   async extractRedFlagsLLM(conversationHistory, scamType, extractedIntelligence = {}) {
     try {
       const conversation = conversationHistory

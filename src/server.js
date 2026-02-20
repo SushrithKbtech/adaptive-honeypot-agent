@@ -1016,8 +1016,62 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             session.usedAsides,
             agentResponse?.metadata?.scamType || session.scamType
         );
-        const processedReply = processed.text;
-        const extractedQuestion = processed.question;
+        let processedReply = processed.text;
+        let extractedQuestion = processed.question;
+
+        // Adaptive required-question injection (LLM phrasing, no hardcoded text)
+        const normalizedAsked = new Set(
+            (session.askedQuestions || [])
+                .map(q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim())
+                .filter(Boolean)
+        );
+        const hasAsked = (re) => {
+            for (const q of normalizedAsked) {
+                if (re.test(q)) return true;
+            }
+            return false;
+        };
+        const missingRequired = [];
+        if (!hasAsked(/\b(phone|callback|contact number|mobile number|call back)\b/i)) missingRequired.push('callback');
+        if (!hasAsked(/\b(upi|upi id|upi handle)\b/i)) missingRequired.push('upi');
+        if (!hasAsked(/\b(bank account|account number|a\/c|account details)\b/i)) missingRequired.push('bank');
+        if (!hasAsked(/\b(link|url|website|portal)\b/i)) missingRequired.push('link');
+        if (!hasAsked(/\b(email|email address|email id)\b/i)) missingRequired.push('email');
+
+        const coversRequiredTopic = (topic, text) => {
+            const t = String(text || '');
+            if (topic === 'callback') return /\b(phone|callback|contact number|mobile|call back)\b/i.test(t);
+            if (topic === 'upi') return /\b(upi)\b/i.test(t);
+            if (topic === 'bank') return /\b(bank account|account number|a\/c|account details)\b/i.test(t);
+            if (topic === 'link') return /\b(link|url|website|portal)\b/i.test(t);
+            if (topic === 'email') return /\b(email|email address|email id)\b/i.test(t);
+            return false;
+        };
+
+        if (session.turnCount <= 9 && missingRequired.length > 0) {
+            const questionCoversMissing = missingRequired.some(topic => coversRequiredTopic(topic, extractedQuestion));
+            if (!questionCoversMissing) {
+                const topic = missingRequired[(session.turnCount - 1) % missingRequired.length];
+                const llmQuestion = await honeypotAgent.generateTopicQuestionLLM(
+                    topic,
+                    agentResponse?.metadata?.scamType || session.scamType,
+                    message.text,
+                    agentHistory,
+                    session.askedQuestions,
+                    session.askedTopics
+                );
+                if (llmQuestion) {
+                    const questionMatch = processedReply.match(/[^.!?]*\?/g);
+                    if (questionMatch && questionMatch.length > 0) {
+                        const lastQuestion = questionMatch[questionMatch.length - 1];
+                        processedReply = processedReply.replace(lastQuestion, llmQuestion);
+                    } else {
+                        processedReply = `${processedReply}${processedReply.endsWith('.') ? '' : '.'} ${llmQuestion}`.trim();
+                    }
+                    extractedQuestion = llmQuestion;
+                }
+            }
+        }
 
         // Track all questions from the final reply to prevent repetition
         const questionMatches = (processedReply.match(/[^.!?]*\?/g) || [])
