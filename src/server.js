@@ -252,7 +252,7 @@ function sanitizeExtractedIntelligence(intel = {}) {
 // ============================================================================
 // HELPER: POST-PROCESS REPLY (1-3 SENTENCES, ONE QUESTION)
 // ============================================================================
-function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = [], askedTopics = [], usedAsides = []) {
+function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = [], askedTopics = [], usedAsides = [], scamType = '') {
     if (!reply) return { text: "Can you tell me more?", question: "Can you tell me more?" };
 
     const isLinkOrAppContext = /\b(link|url|website|click|download|app|apk)\b/i.test(String(scammerText || ''));
@@ -470,17 +470,18 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     // Ensure first turn starts with a brief shocked reaction before any question.
     if (turn === 1) {
         const textLc = String(scammerText || '').toLowerCase();
+        const type = String(scamType || '').toLowerCase();
         let shock = "Oh no, this is unexpected.";
-        if (/\b(kyc|bank|account|sbi|blocked|suspended|fraud|otp)\b/i.test(textLc)) {
-            shock = "Oh no, this is scary. I was not expecting a bank alert.";
-        } else if (/\b(challan|traffic|fine|police|rto|vehicle)\b/i.test(textLc)) {
-            shock = "Oh no, this is a shock. I did not expect any challan.";
-        } else if (/\b(lottery|prize|winner|reward|lucky draw)\b/i.test(textLc)) {
+        if (type === 'lottery_prize' || /\b(lottery|prize|winner|reward|lucky draw)\b/i.test(textLc)) {
             shock = "Oh wow, I am surprised. I never expected a prize like this.";
-        } else if (/\b(delivery|parcel|courier|package|tracking)\b/i.test(textLc)) {
-            shock = "Oh, this is unexpected. I was not waiting for any parcel.";
-        } else if (/\b(electricity|power|bill|disconnected)\b/i.test(textLc)) {
+        } else if (type === 'traffic_challan' || /\b(challan|traffic|fine|police|rto|vehicle)\b/i.test(textLc)) {
+            shock = "Oh no, this is a shock. I did not expect any challan.";
+        } else if (type === 'electricity_bill' || /\b(electricity|power|bill|disconnected)\b/i.test(textLc)) {
             shock = "Oh no, this is worrying. I paid my bill recently.";
+        } else if (type === 'fake_delivery' || /\b(delivery|parcel|courier|package|tracking)\b/i.test(textLc)) {
+            shock = "Oh, this is unexpected. I was not waiting for any parcel.";
+        } else if (type === 'bank_fraud' || type === 'upi_fraud' || type === 'kyc_update' || /\b(kyc|bank|account|sbi|blocked|suspended|fraud|otp)\b/i.test(textLc)) {
+            shock = "Oh no, this is scary. I was not expecting a bank alert.";
         }
         finalParts.push(shock);
     }
@@ -802,7 +803,8 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             session.turnCount,
             session.askedQuestions,
             session.askedTopics,
-            session.usedAsides
+            session.usedAsides,
+            agentResponse?.metadata?.scamType || session.scamType
         );
         const processedReply = processed.text;
         const extractedQuestion = processed.question;
