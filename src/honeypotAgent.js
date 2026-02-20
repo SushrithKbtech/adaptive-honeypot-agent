@@ -1770,6 +1770,20 @@ Allowed scamType values:
 
 confidenceLevel: one of "low", "medium", "high".
 
+Guidance:
+- "lottery_prize" if prize/winner/reward/cashback/processing fee is mentioned.
+- "ecommerce" if order/refund/cancellation/amazon/flipkart/delivery/app purchase appears.
+- "traffic_challan" if challan/traffic/violation/fine/vehicle/police appears.
+- "electricity_bill" if power/electricity/consumer number/bill/disconnection appears.
+- "bank_fraud" if bank/OTP/account blocked/IFSC/transaction for a bank is the focus.
+- "upi_fraud" if UPI/collect request/UPI PIN/PhonePe/Paytm/Google Pay is the focus.
+- "kyc_update" if KYC update/verification link/account freeze due to KYC is the focus.
+- "fake_delivery" if courier/parcel/tracking/customs/delivery fee is the focus.
+- "apk_remote" if AnyDesk/TeamViewer/remote access/app install is asked.
+- "investment_scam" if investment/crypto/returns/profit/trading is asked.
+- "tax_refund" if income tax/ITR/refund/assessment is asked.
+- "phishing" if generic link click/credentials with no clear category.
+
 SCAMMER MESSAGES:
 ${scammerOnly}
 
@@ -1917,10 +1931,25 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
       const turnNumber = Math.floor(conversationHistory.length / 2) + 1;
 
       // Detect scam type
-      const scamType = this.detectScamType(message, conversationHistory);
+      let scamType = this.detectScamType(message, conversationHistory);
 
       // Extract intelligence from current message (regex-based)
       const newIntelligence = this.extractIntelligence(message, conversationHistory);
+
+      // LLM scam type override when confidence is medium/high
+      try {
+        if (conversationHistory.length >= 2) {
+          const llmType = await this.classifyScamTypeLLM(
+            [...conversationHistory, { sender: 'scammer', text: message }],
+            newIntelligence
+          );
+          if (llmType && llmType.scamType && llmType.scamType !== 'other' && llmType.confidenceLevel !== 'low') {
+            scamType = llmType.scamType;
+          }
+        }
+      } catch (error) {
+        console.error('LLM scam type override error:', error);
+      }
 
       // Extract suspicious keywords using LLM (more intelligent)
       if (conversationHistory.length >= 2) {
@@ -1976,8 +2005,16 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
         conversationHistory
       );
 
-      // Detect scam type
-      const scamType = this.detectScamType('', conversationHistory);
+      // Detect scam type (LLM-first)
+      let scamType = this.detectScamType('', conversationHistory);
+      try {
+        const llmType = await this.classifyScamTypeLLM(conversationHistory, extractedIntelligence);
+        if (llmType && llmType.scamType && llmType.scamType !== 'other' && llmType.confidenceLevel !== 'low') {
+          scamType = llmType.scamType;
+        }
+      } catch (error) {
+        console.error('LLM scam type detection error:', error);
+      }
 
       // Calculate engagement metrics
       const totalMessages = conversationHistory.length;
