@@ -493,7 +493,34 @@ class AdaptiveHoneypotAgent {
     return candidates[Math.floor(Math.random() * candidates.length)];
   }
 
-  enforceNonRepetitiveReply(reply, askedTopics, scammerMessage, conversationContext, conversationHistory, scenario = 'bank_fraud', askedQuestions = []) {
+  buildBlockedTopicsFromIntel(extractedIntelligence = {}) {
+    const blocked = new Set();
+    const has = (arr) => Array.isArray(arr) && arr.length > 0;
+    if (has(extractedIntelligence.phoneNumbers) || has(extractedIntelligence.callbackNumbers)) blocked.add('callback');
+    if (has(extractedIntelligence.upiIds)) blocked.add('upi');
+    if (has(extractedIntelligence.bankAccounts)) blocked.add('bank');
+    if (has(extractedIntelligence.phishingLinks)) blocked.add('link');
+    if (has(extractedIntelligence.emailAddresses)) blocked.add('email');
+    if (has(extractedIntelligence.caseIds)) blocked.add('caseid');
+    if (has(extractedIntelligence.orderIds)) blocked.add('orderid');
+    if (has(extractedIntelligence.policyNumbers)) blocked.add('policy');
+    if (has(extractedIntelligence.trackingIds)) blocked.add('tracking');
+    if (has(extractedIntelligence.challanNumbers)) blocked.add('challan');
+    if (has(extractedIntelligence.consumerNumbers)) blocked.add('consumer');
+    if (has(extractedIntelligence.vehicleNumbers)) blocked.add('vehicle');
+    if (has(extractedIntelligence.employeeIds)) blocked.add('empid');
+    if (has(extractedIntelligence.transactionIds)) blocked.add('txnid');
+    if (has(extractedIntelligence.amounts)) blocked.add('amount');
+    if (has(extractedIntelligence.merchantNames)) blocked.add('merchant');
+    if (has(extractedIntelligence.departmentNames)) blocked.add('dept');
+    if (has(extractedIntelligence.orgNames)) blocked.add('org');
+    if (has(extractedIntelligence.supervisorNames)) blocked.add('supervisor');
+    if (has(extractedIntelligence.appNames)) blocked.add('app');
+    if (has(extractedIntelligence.officerNames)) blocked.add('officer');
+    return blocked;
+  }
+
+  enforceNonRepetitiveReply(reply, askedTopics, scammerMessage, conversationContext, conversationHistory, scenario = 'bank_fraud', askedQuestions = [], extractedIntelligence = {}) {
     const recentQs = new Set((conversationHistory || []).map(m => (m.text || '').toLowerCase()));
     for (const q of askedQuestions || []) {
       if (q) recentQs.add(String(q).toLowerCase());
@@ -509,13 +536,17 @@ class AdaptiveHoneypotAgent {
     }
 
     const questions = this.extractQuestionSentences(reply);
+    const blockedTopics = new Set(askedTopics);
+    for (const t of this.buildBlockedTopicsFromIntel(extractedIntelligence)) {
+      blockedTopics.add(t);
+    }
     const selected = [];
     const selectedTopics = new Set();
 
     for (const q of questions) {
       if (selected.length >= 2) break;
       const topics = this.extractQuestionTopics(q);
-      const isRepeat = [...topics].some(t => askedTopics.has(t) || selectedTopics.has(t));
+      const isRepeat = [...topics].some(t => blockedTopics.has(t) || selectedTopics.has(t));
       if (topics.size > 0 && isRepeat) continue;
       if (recentQs.has(String(q).toLowerCase())) continue;
 
@@ -524,7 +555,8 @@ class AdaptiveHoneypotAgent {
     }
 
     if (selected.length === 0) {
-      selected.push(this.pickNonRepeatingQuestion(askedTopics, scammerMessage, conversationContext, recentQs, scenario));
+      const mergedAsked = new Set([...askedTopics, ...blockedTopics]);
+      selected.push(this.pickNonRepeatingQuestion(mergedAsked, scammerMessage, conversationContext, recentQs, scenario));
     }
 
     // Keep the natural lead-in (everything before the first question)
@@ -1676,7 +1708,8 @@ Write the reply now (turn ${turnNumber}):`;
         conversationContext,
         conversationHistory,
         scamType,
-        askedQuestions
+        askedQuestions,
+        extractedIntelligence
       );
 
       // B. Enforce Scenario Voice Prefix (Authenticity) - DISABLED to prevent repetition
