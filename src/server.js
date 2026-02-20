@@ -799,7 +799,7 @@ function normalizeFinalPayload(sessionData, agentResponse) {
 // ============================================================================
 // GUVI HACKATHON CALLBACK ENDPOINT
 // ============================================================================
-const GUVI_CALLBACK_URL = 'https://hackathon.guvi.in/api/updateHoneyPotFinalResult';
+const GUVI_CALLBACK_URL = 'https://guvi-endpoint-tester-production.up.railway.app/api/callback';
 
 function buildCompactExtractedIntelligence(intel = {}) {
     const base = {
