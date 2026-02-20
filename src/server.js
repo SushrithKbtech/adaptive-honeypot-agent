@@ -139,7 +139,113 @@ function mergeIntelligence(existing, newData) {
         merged.phoneNumbers = [...new Set([...merged.phoneNumbers, ...merged.callbackNumbers])];
     }
 
-    return merged;
+    return sanitizeExtractedIntelligence(merged);
+}
+
+// ============================================================================
+// HELPER: SANITIZE EXTRACTED INTELLIGENCE (CLEAN + VALIDATE FIELDS)
+// ============================================================================
+function sanitizeExtractedIntelligence(intel = {}) {
+    const out = { ...intel };
+    const stripEdge = (s) => String(s || '').replace(/^[\s"'`([{<]+|[\s"'`)\]}>.,;:]+$/g, '').trim();
+    const unique = (arr) => [...new Set((arr || []).filter(Boolean))];
+
+    const matchFirst = (value, regexes) => {
+        const v = stripEdge(value);
+        for (const re of regexes) {
+            const m = v.match(re);
+            if (m) return stripEdge(m[1] || m[0]);
+        }
+        return null;
+    };
+
+    const filterBy = (list, regexes) => {
+        const outList = [];
+        for (const v of (list || [])) {
+            const matched = matchFirst(v, regexes);
+            if (matched) outList.push(matched);
+        }
+        return unique(outList);
+    };
+
+    const filterDigits = (list, minLen, maxLen) => {
+        const outList = [];
+        for (const v of (list || [])) {
+            const digits = String(v || '').replace(/\D/g, '');
+            if (!digits) continue;
+            if (digits.length < minLen || digits.length > maxLen) continue;
+            outList.push(digits);
+        }
+        return unique(outList);
+    };
+
+    out.phoneNumbers = filterBy(out.phoneNumbers, [
+        /(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}\b/g
+    ]);
+    out.callbackNumbers = filterBy(out.callbackNumbers, [
+        /(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}\b/g
+    ]);
+    out.bankAccounts = filterDigits(out.bankAccounts, 9, 18);
+    out.consumerNumbers = filterDigits(out.consumerNumbers, 6, 14);
+    out.accountLast4 = filterDigits(out.accountLast4, 4, 4);
+
+    out.upiIds = filterBy(out.upiIds, [
+        /[a-zA-Z0-9._-]+@[a-zA-Z]{2,}\b/g
+    ]);
+    out.emailAddresses = filterBy(out.emailAddresses, [
+        /[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}\b/g
+    ]);
+
+    out.phishingLinks = filterBy(out.phishingLinks, [
+        /https?:\/\/[^\s]+/i,
+        /www\.[^\s]+/i,
+        /\b[a-z0-9-]+\.(?:com|in|org|net|xyz|click|site|top|online)(?:\/[^\s]*)?\b/i
+    ]);
+
+    out.amounts = filterBy(out.amounts, [
+        /(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d+)?/i,
+        /\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b/,
+        /\b\d+(?:\.\d+)?\s*(?:lakh|crore)\b/i,
+        /\b\d{3,7}\b/
+    ]);
+
+    const idRegex = /\b[A-Z]{2,6}-?\d{3,12}\b/i;
+    out.employeeIds = filterBy(out.employeeIds, [idRegex]);
+    out.caseIds = filterBy(out.caseIds, [idRegex, /\b(?:REF|CASE|TICKET|CLAIM)[-:\s]?[A-Z0-9-]{3,}\b/i]);
+    out.challanNumbers = filterBy(out.challanNumbers, [idRegex]);
+    out.trackingIds = filterBy(out.trackingIds, [/\b[A-Z0-9]{8,}\b/i]);
+    out.orderIds = filterBy(out.orderIds, [
+        /\b\d{2,4}-\d{5,}\b/,
+        /\b[A-Z]{2,5}-?\d{3,}\b/i
+    ]);
+    out.policyNumbers = filterBy(out.policyNumbers, [
+        /\bPOL\d{5,}\b/i,
+        /\b[A-Z]{2,5}\d{5,}\b/i
+    ]);
+    out.transactionIds = filterBy(out.transactionIds, [
+        /\b(?:TXN|UTR|REF|TRX)[-]?[A-Z0-9]{6,}\b/i,
+        /\b[A-Z0-9]{8,}\b/i
+    ]);
+    out.ifscCodes = filterBy(out.ifscCodes, [/\b[A-Z]{4}0[A-Z0-9]{6}\b/i]);
+    out.vehicleNumbers = filterBy(out.vehicleNumbers, [/\b[A-Z]{2}\s?\d{2}\s?[A-Z]{1,2}\s?\d{4}\b/i]);
+
+    const cleanTextList = (list) => unique((list || [])
+        .map(stripEdge)
+        .filter(v => v && v.length > 1));
+
+    out.merchantNames = cleanTextList(out.merchantNames);
+    out.orgNames = cleanTextList(out.orgNames);
+    out.departmentNames = cleanTextList(out.departmentNames);
+    out.supervisorNames = cleanTextList(out.supervisorNames);
+    out.appNames = cleanTextList(out.appNames);
+    out.officerNames = cleanTextList(out.officerNames);
+
+    const badToken = /["{}\[\]]/;
+    out.suspiciousKeywords = unique((out.suspiciousKeywords || [])
+        .map(stripEdge)
+        .filter(v => v && !badToken.test(v)));
+
+    return out;
 }
 
 // ============================================================================
