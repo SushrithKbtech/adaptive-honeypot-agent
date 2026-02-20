@@ -867,6 +867,10 @@ async function sendGuviCallback(sessionData, conversationHistory) {
             redFlags: redFlags || [],
             redFlagsSummary: redFlagsSummary || '',
             extractedIntelligence: compactIntel,
+            engagementMetrics: {
+                totalMessagesExchanged: sessionData.turnCount * 2,
+                engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1
+            },
             agentNotes: agentNotes
         };
 
