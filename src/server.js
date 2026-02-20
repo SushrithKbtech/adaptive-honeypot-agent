@@ -812,6 +812,40 @@ function buildRedFlagsSummary(redFlags = []) {
     return `Red flags include ${parts.join(', ')}.`;
 }
 
+function sanitizeRedFlags(redFlags = [], extractedIntelligence = {}) {
+    const out = [];
+    const seen = new Set();
+    const allowedSeverity = new Set(['low', 'medium', 'high', 'critical']);
+
+    const pushFlag = (flag) => {
+        if (!flag || typeof flag !== 'object') return;
+        const type = String(flag.type || '').trim();
+        const evidence = String(flag.evidence || '').trim();
+        if (!type || !evidence) return;
+        const severityRaw = String(flag.severity || '').trim().toLowerCase();
+        const severity = allowedSeverity.has(severityRaw) ? severityRaw : 'medium';
+        const key = `${type}:${evidence}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push({ type, evidence, severity });
+    };
+
+    if (Array.isArray(redFlags)) {
+        for (const f of redFlags) pushFlag(f);
+    }
+
+    // Ensure at least 5 without inventing evidence
+    if (out.length < 5) {
+        const fallback = honeypotAgent.buildRedFlagsFromKeywords(extractedIntelligence) || [];
+        for (const f of fallback) {
+            pushFlag(f);
+            if (out.length >= 5) break;
+        }
+    }
+
+    return out.slice(0, 10);
+}
+
 // ============================================================================
 // HELPER: SEND CALLBACK TO GUVI
 // ============================================================================
@@ -860,6 +894,7 @@ async function sendGuviCallback(sessionData, conversationHistory) {
                 if (redFlags.length >= 5) break;
             }
         }
+        redFlags = sanitizeRedFlags(redFlags, sessionData.extractedIntelligence);
         const redFlagsSummary = buildRedFlagsSummary(redFlags);
         sessionData.redFlagsSummary = redFlagsSummary;
         sessionData.redFlags = redFlags;
