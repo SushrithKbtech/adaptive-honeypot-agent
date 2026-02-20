@@ -1482,7 +1482,7 @@ async function startServer() {
             console.log(`📡 Server running on port ${PORT}`);
             console.log(`🔗 Endpoint: http://localhost:${PORT}/api/conversation`);
             console.log(`🔒 API Key: ${API_KEY ? 'Required' : 'Not required'}`);
-            console.log(`🤖 AI Model: GPT-4o-mini (OpenAI)`);
+            console.log(`🤖 AI Model: GPT-4.1-mini (OpenAI)`);
             console.log('='.repeat(60) + '\n');
             console.log('Ready to engage scammers! 🎯\n');
         });
