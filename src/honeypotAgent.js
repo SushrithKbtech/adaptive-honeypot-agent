@@ -12,7 +12,7 @@ class AdaptiveHoneypotAgent {
     this.openai = new OpenAI({
       apiKey: apiKey
     });
-    this.model = 'gpt-4o-mini'; // Fast, efficient, cost-effective
+    this.model = 'gpt-4.1-mini'; // More natural conversational quality
 
     // Scam type detection patterns
     this.scamPatterns = {
@@ -301,25 +301,101 @@ class AdaptiveHoneypotAgent {
   getTopicVariants(topic, scenario = 'bank_fraud') {
     // Simplified variant generator (expanded in reference, kept minimal here for brevity but functional)
     const variants = {
-      callback: ["Can you please tell me your callback number?", "Sir, can you share a contact number to call?", "Can you share your phone number?"],
-      empid: ["Can you please tell me your employee ID?", "Sir, what is your staff ID?", "Can you share your ID card number?"],
-      email: ["What is your official email address?", "Sir, can you share your email ID?"],
-      caseid: ["What is the case reference number?", "Sir, is there a complaint ID?"],
-      upi: ["Which UPI ID should I use?", "Sir, what is the UPI handle?"],
-      dept: ["Which department are you calling from?", "Sir, what describes your office?"],
-      name: ["What is your full name?", "Sir, who am I speaking with?"],
-      link: ["Can you send the official website link?", "Sir, what is the URL?"],
-      amount: ["What is the exact amount involved?", "Sir, how much money is it?"],
-      tracking: ["What is the tracking number?", "Sir, can you give the consignment ID?"],
-      challan: ["What is the challan number?", "Sir, which violation number is this?"],
-      consumer: ["What is the consumer number?", "Sir, can you give the CA number?"],
-      app: ["Which app should I download?", "Sir, what is the application name?"],
-      fee: ["How much is the processing fee?", "Sir, what is the charge amount?"],
-      org: ["What is the company name?", "Sir, which organization is this?"],
-      documents: ["What documents do you need?", "Sir, is PAN or Aadhaar required?"],
-      officer: ["What is the officer's name?", "Sir, who is the handling officer?"],
-      supervisor: ["Can you share your supervisor's name?", "Sir, who is your reporting manager?"],
-      address: ["Where is your office located?", "Sir, can you share the branch address?"]
+      callback: [
+        "My phone might cut off. What is the best number to call you back?",
+        "Can I have a contact number to verify this from another phone?",
+        "Which number should I call to confirm this?"
+      ],
+      empid: [
+        "Can you share your employee ID so I can note it down?",
+        "What is your staff or employee ID?",
+        "Do you have an ID or badge number I can reference?"
+      ],
+      email: [
+        "What is your official email address?",
+        "Can you share an official email ID I can reply to?",
+        "Is there a support email for this?"
+      ],
+      caseid: [
+        "Is there a case or reference number for this?",
+        "Can you share the reference ID?",
+        "What is the ticket or case number?"
+      ],
+      upi: [
+        "Which UPI ID should I use to pay?",
+        "Can you send your UPI handle?",
+        "What is the UPI ID for the payment?"
+      ],
+      dept: [
+        "Which department are you calling from?",
+        "What team are you from exactly?",
+        "Is this the fraud/prevention team or another department?"
+      ],
+      name: [
+        "What is your full name?",
+        "Who am I speaking with?",
+        "Can you share your name please?"
+      ],
+      link: [
+        "Can you send the official website link?",
+        "What is the exact URL I should use?",
+        "Is there an official site link?"
+      ],
+      amount: [
+        "What is the exact amount involved?",
+        "How much do I need to pay exactly?",
+        "Can you confirm the amount?"
+      ],
+      tracking: [
+        "What is the tracking number?",
+        "Can you share the consignment/tracking ID?",
+        "Do you have a tracking reference for this?"
+      ],
+      challan: [
+        "What is the challan number?",
+        "Which violation number is this?",
+        "Can you share the challan ID?"
+      ],
+      consumer: [
+        "What is the consumer number?",
+        "Can you share the CA/consumer number?",
+        "Which consumer ID is this linked to?"
+      ],
+      app: [
+        "Which app should I install?",
+        "What is the app name?",
+        "Is this from the official app store? Which app exactly?"
+      ],
+      fee: [
+        "Is there any processing fee? How much?",
+        "What is the fee or charge amount?",
+        "How much is the processing charge?"
+      ],
+      org: [
+        "Which company or organization is this from?",
+        "What is the official company name?",
+        "Which organization are you representing?"
+      ],
+      documents: [
+        "What documents do you need from me?",
+        "Do you need PAN/Aadhaar for this?",
+        "Which documents should I keep ready?"
+      ],
+      officer: [
+        "What is the officer's name?",
+        "Who is the handling officer?",
+        "Can you share the officer/agent name?"
+      ],
+      supervisor: [
+        "Can you share your supervisor's name?",
+        "Who is your reporting manager?",
+        "Is there a senior contact I can note?"
+      ],
+      address: [
+        "Where is your office located?",
+        "Can you share the branch/office address?",
+        "Which branch/location is this from?"
+      ]
     };
     return variants[topic] || [`Can you tell me more about ${topic}?`];
   }
@@ -340,7 +416,7 @@ class AdaptiveHoneypotAgent {
       }
     }
     // Universal Fallback Trap - If logic fails, DEFAULT TO MONEY BAIT
-    return "Sir, I am trying to pay but getting network error. What is your direct UPI ID so I can send immediately?";
+    return "I'm trying to pay but the page isn't loading. What is your UPI ID or number so I can send it directly?";
   }
 
   pickFreshOpener(conversationHistory) {
@@ -418,7 +494,11 @@ class AdaptiveHoneypotAgent {
   }
 
   enforceNonRepetitiveReply(reply, askedTopics, scammerMessage, conversationContext, conversationHistory, scenario = 'bank_fraud', askedQuestions = []) {
-    const questionTopics = this.extractQuestionTopics(reply);
+    const recentQs = new Set((conversationHistory || []).map(m => (m.text || '').toLowerCase()));
+    for (const q of askedQuestions || []) {
+      if (q) recentQs.add(String(q).toLowerCase());
+    }
+
     // Strengthen askedTopics with askedQuestions-derived topics
     if (askedQuestions && askedQuestions.length > 0) {
       for (const q of askedQuestions) {
@@ -428,41 +508,51 @@ class AdaptiveHoneypotAgent {
       }
     }
 
-    // 1. Is the QUESTION repetitive?
-    let finalQuestion = "";
-    // If no question asked, pick a new one
-    if (questionTopics.size === 0) {
-      const recentQs = new Set((conversationHistory || []).map(m => (m.text || '').toLowerCase()));
-      for (const q of askedQuestions || []) {
-        if (q) recentQs.add(String(q).toLowerCase());
-      }
-      finalQuestion = this.pickNonRepeatingQuestion(askedTopics, scammerMessage, conversationContext, recentQs, scenario);
+    const questions = this.extractQuestionSentences(reply);
+    const selected = [];
+    const selectedTopics = new Set();
+
+    for (const q of questions) {
+      if (selected.length >= 2) break;
+      const topics = this.extractQuestionTopics(q);
+      const isRepeat = [...topics].some(t => askedTopics.has(t) || selectedTopics.has(t));
+      if (topics.size > 0 && isRepeat) continue;
+      if (recentQs.has(String(q).toLowerCase())) continue;
+
+      selected.push(q.trim());
+      for (const t of topics) selectedTopics.add(t);
+    }
+
+    if (selected.length === 0) {
+      selected.push(this.pickNonRepeatingQuestion(askedTopics, scammerMessage, conversationContext, recentQs, scenario));
+    }
+
+    // Keep the natural lead-in (everything before the first question)
+    let opener = '';
+    if (questions.length > 0) {
+      const idx = reply.indexOf(questions[0]);
+      if (idx > 0) opener = reply.substring(0, idx).trim();
     } else {
-      // Check overlaps
-      const repeated = [...questionTopics].some(t => askedTopics.has(t));
-      if (repeated) {
-        // Replacement logic
-        const recentQs = new Set((conversationHistory || []).map(m => (m.text || '').toLowerCase()));
-        for (const q of askedQuestions || []) {
-          if (q) recentQs.add(String(q).toLowerCase());
-        }
-        finalQuestion = this.pickNonRepeatingQuestion(askedTopics, scammerMessage, conversationContext, recentQs, scenario);
+      opener = reply.trim();
+    }
+
+    const normalizeQ = (q) => {
+      const trimmed = String(q || '').trim();
+      return trimmed.endsWith('?') ? trimmed : `${trimmed}?`;
+    };
+
+    let questionText = normalizeQ(selected[0]);
+    if (selected.length > 1) {
+      const q2 = normalizeQ(selected[1]);
+      if (/^(also|and)\b/i.test(q2)) {
+        questionText = `${questionText} ${q2}`;
       } else {
-        // Keep original question part
-        const qMatch = /[^.!?]*\?/.exec(reply);
-        finalQuestion = qMatch ? qMatch[0].trim() : reply.trim();
+        const lowerQ2 = q2.charAt(0).toLowerCase() + q2.slice(1);
+        questionText = `${questionText} Also, ${lowerQ2}`;
       }
     }
 
-    // Preserve LLM phrasing; only swap the question if needed.
-    let opener = "";
-    const originalOpenerEndIndex = reply.indexOf(finalQuestion);
-
-    if (originalOpenerEndIndex > 0) {
-      opener = reply.substring(0, originalOpenerEndIndex).trim();
-    }
-
-    return opener ? `${opener} ${finalQuestion}` : finalQuestion;
+    return opener ? `${opener} ${questionText}`.replace(/\s+/g, ' ').trim() : questionText.trim();
   }
 
   // ============================================================================
@@ -1448,76 +1538,38 @@ Keywords:`;
 
     // Strategy 1: Transaction Failure Hook (Link/App context)
     if (lowerMsg.match(/(link|url|download|app|apk|install|click)/)) {
-      tacticalInstruction = `\n🔥 TACTICAL MOVE: "Transaction Failure Hook"\n- Claim you opened the link/app but it's asking for a 'Department Verification Code' or 'Branch IFSC'.\n- ASK FOR THIS CODE so you can proceed. (This traps them into giving fake but traceable intel).`;
-    }
-    // Strategy 2: Alternative Payment Bait (Payment context)
-    else if (lowerMsg.match(/(pay|transfer|send|amount|deposit|fees|charge)/) && missingUpi) {
-      tacticalInstruction = `\n🔥 TACTICAL MOVE: "Alternative Payment Bait"\n- Claim the link is giving "404 Error".\n- Say you have the money ready on GPay/PhonePe.\n- ASK for their direct UPI ID or Number to send immediately.`;
-    }
-    // Strategy 3: Third-Party Verification (Credibility Check - Mid game)
-    else if (turnNumber > 4 && missingEmpId) {
-      tacticalInstruction = `\n🔥 TACTICAL MOVE: "Third-Party Type"\n- Say your Dad/Uncle (who is a Police/Bank guy) is standing next to you.\n- Say he is asking for your Employee ID/Supervisor Name to verify.\n- ASK for ID clearly to satisfy him.`;
-    }
-    // Strategy 4: Callback/Low Battery (Late game/Desperation)
-    else if (turnNumber > 6 && missingPhone) {
-      tacticalInstruction = `\n🔥 TACTICAL MOVE: "Low Battery Strategy"\n- Say your phone is at 2% battery and about to die.\n- ASK for a direct callback number or desk number immediately so you can call back.`;
+      tacticalInstruction = "Mention the link/app is not opening or is asking for a verification code/IFSC, and ask for the exact code so you can proceed.";
+    } else if (lowerMsg.match(/(pay|transfer|send|amount|deposit|fees|charge)/) && missingUpi) {
+      tacticalInstruction = "Say the payment page is failing and you want to pay via UPI; ask for their UPI ID or number.";
+    } else if (turnNumber > 4 && missingEmpId) {
+      tacticalInstruction = "Say a family member wants their employee ID or supervisor name before you proceed; ask for it.";
+    } else if (turnNumber > 6 && missingPhone) {
+      tacticalInstruction = "Say your battery is low and ask for a callback number you can call back on.";
     }
 
     // 5. Indian English System Prompt (Enhanced with Reciprocity Trap & Strict Variety)
-    const prompt = `You are an AI playing a confused, worried Indian citizen receiving a scam message.
+    const prompt = `You are a real person texting a scammer on WhatsApp/SMS.
+Be natural, conversational, and not scripted. React to what they just said, then ask 1-2 short, specific questions.
 
-🎭 CORE PERSONA:
-- Name: Rahul/Priya (Implicit)
-- Style: Indian English (Hinglish influence), informal, polite ("Sir")
-- Mindset: Worried but trying to solve the problem directly. NOT helpless, but seeking clarity.
-- Goal: You want to help/pay/verify, BUT you hit a small technical blocker that requires their help.
-
-🧠 STRATEGY - "THE RECIPROCITY TRAP":
-A bot simply asks questions. A human NEGOTIATES.
-To get intelligence, you must OFFER something (compliance, money, trust) but put a small hurdle in the way.
-- To get Bank Details -> "I have the money ready, but link failed. Give UPI ID."
-- To get Employee ID -> "My uncle (police) is asking for ID to verify before I pay."
-- To get Callback -> "Battery is 2%. Give number quickly."
-
-🚫 CRITICAL RULES TO FIX REPETITION:
-1. BRIDGE & REACT (THE "HUMAN" TOUCH):
-   - NEVER just ask a question. ALWAYS react first.
-   - Money/Penalty? -> React: "₹500?! That is too much!" or "₹25 Lakhs? I am rich!"
-   - Threat? -> React: "Police?? I am scared sir!" or "Blocked?? But why?"
-   - BRIDGE: "₹500 is big amount sir... (Bridge) ... but what is the exact challan number?"
-
-2. REPETITION TRAP:
-   - IF YOU ALREADY ASKED FOR INFO (like ID, OTP), DO NOT ASK AGAIN.
-   - If they gave it, acknowledge: "Okay I noted it..." then ask NEXT thing.
-   - NEVER ASK "What do I need to do?" or "How should I proceed?". BANNED.
-
-3. VARY YOUR OPENERS! (Don't always use "Sir"):
-   - Use: "Ayyo", "Actually", "One minute", "Wait", "God...", "Please na".
-
-💬 AUTHENTIC EXAMPLES:
-- "Ayyo, why is it asking for password? Bank said never share pwd."
-- "Sir, I opened the link but it says 'Server Error'. Do you have UPI ID directly? I will GPay now."
-- "Actually my dad is shouting at me here. He wants your Employee ID to confirm this is proper. Please give na."
-- "Sir, battery is dying only. 1% left. What is your desk number? I will call from landline."
-
-SITUATION: ${scamType}
+Situation: ${scamType}
+Recent chat:
 ${conversationContext}
 
-THEY JUST SAID: "${message}"
+Scammer's last message: "${message}"
 
-YOUR STATE: ${personaInstructions}
+Your state: ${personaInstructions}
+What you still need to ask: ${questioningStrategy}
+${tacticalInstruction ? `Helpful angle: ${tacticalInstruction}` : ''}
 
-WHAT TO EXTRACT: ${questioningStrategy}
-${tacticalInstruction}
+Rules:
+- 2-4 sentences, casual and human.
+- Ask 1-2 questions max, and keep them at the end.
+- Avoid repeating earlier questions.
+- Avoid stock phrases like "just tell me one thing" or "I am trying only".
+- Use "sir" occasionally, not in every line.
+- If they already gave info, acknowledge briefly and ask the next thing.
 
-🚨 FINAL INSTRUCTIONS:
-- Turn 1-2: Scared/Surprised.
-- Turn 3+: BUSY/NEGOTIATING. "I am trying to do it, but..."
-- ONE QUESTION ONLY.
-- 1-3 sentences allowed. Sometimes add a short human aside for realism (e.g., not tech savvy).
-- NO REPETITIVE PHRASES. Use a fresh natural reaction.
-- IF THEY GAVE INFO (e.g. Phone), DO NOT ASK FOR IT AGAIN.
-TURN ${turnNumber} - Text naturally & TRAP THEM:`;
+Write the reply now (turn ${turnNumber}):`;
 
     try {
       const completion = await this.openai.chat.completions.create({
@@ -1525,7 +1577,7 @@ TURN ${turnNumber} - Text naturally & TRAP THEM:`;
         messages: [
           {
             role: 'system',
-            content: 'You are a real Indian person chatting like WhatsApp/SMS. Be natural, conversational, and authentic. React to what they said, then ask your question. No formulas, no patterns, just real human texting.'
+            content: 'You are a worried person texting on WhatsApp/SMS. Write like a real human: natural, coherent, and context-aware. React briefly, then ask 1-2 short questions at the end. Avoid template phrases.'
           },
           {
             role: 'user',
