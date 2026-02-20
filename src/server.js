@@ -258,7 +258,7 @@ function sanitizeExtractedIntelligence(intel = {}) {
     const shortIdRegex = /\b[A-Z]{2,6}-\d{3,12}\b/i;
     out.employeeIds = filterBy(out.employeeIds, [hyphenIdRegex, shortIdRegex]);
     out.caseIds = filterBy(out.caseIds, [hyphenIdRegex, /\b(?:REF|CASE|TICKET|CLAIM)[-:\s]?[A-Z0-9-]{3,}\b/i]);
-    out.challanNumbers = filterBy(out.challanNumbers, [idRegex]);
+    out.challanNumbers = filterBy(out.challanNumbers, [hyphenIdRegex, shortIdRegex]);
     out.trackingIds = filterBy(out.trackingIds, [/\b[A-Z0-9]{8,}\b/i]);
     out.orderIds = filterBy(out.orderIds, [
         /\b\d{2,4}-\d{5,}\b/,
