@@ -294,7 +294,7 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
         callback: [
             "If I need to call back, which number should I use?",
             "Can I have a contact number to verify this?",
-            "What’s the best phone number to reach you?"
+            "What is the best phone number to reach you?"
         ],
         upi: [
             "If I have to pay, which UPI ID should I use?",
@@ -318,6 +318,167 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
         ]
     };
 
+    const scenarioQuestionMap = {
+        lottery_prize: {
+            bank: [
+                "If this prize is real, which bank account should it be credited to?",
+                "For the prize, which account should I use to receive it?"
+            ],
+            upi: [
+                "If there is a processing fee, which UPI ID should I use?",
+                "Which UPI ID is for the prize claim?"
+            ],
+            link: [
+                "Can you share the official claim link?",
+                "Which website should I open to claim the prize?"
+            ],
+            email: [
+                "What is the official email for the prize claim?",
+                "Which email should I write to for this prize?"
+            ],
+            callback: [
+                "What number should I call to confirm this prize?",
+                "Is there a contact number for this claim?"
+            ]
+        },
+        ecommerce: {
+            bank: [
+                "For the refund, which bank account should I use?",
+                "If this is a refund, which account should it go to?"
+            ],
+            upi: [
+                "If refund is via UPI, which UPI ID should I use?",
+                "Which UPI ID is for this refund?"
+            ],
+            link: [
+                "Which official order page should I open?",
+                "Can you share the correct refund link?"
+            ],
+            email: [
+                "What is the official support email for this order?",
+                "Which email should I reply to for this refund?"
+            ],
+            callback: [
+                "What number should I call to verify this order issue?",
+                "Is there a contact number for the refund team?"
+            ]
+        },
+        traffic_challan: {
+            bank: [
+                "If I need to pay the fine, which account is it to?",
+                "Which bank account should I pay this challan to?"
+            ],
+            upi: [
+                "If payment is via UPI, which ID should I use?",
+                "Which UPI ID is for this challan payment?"
+            ],
+            link: [
+                "Which official challan portal should I use?",
+                "Can you share the official challan payment link?"
+            ],
+            email: [
+                "What is the official email for the traffic department?",
+                "Which email should I write to for this challan?"
+            ],
+            callback: [
+                "What number should I call to verify this challan?",
+                "Is there a helpline for traffic challans?"
+            ]
+        },
+        electricity_bill: {
+            bank: [
+                "Which bank account should I pay this bill to?",
+                "If I pay now, which account is it credited to?"
+            ],
+            upi: [
+                "If payment is via UPI, which ID should I use?",
+                "Which UPI ID is for the electricity bill?"
+            ],
+            link: [
+                "Which official payment portal should I use?",
+                "Can you share the bill payment link?"
+            ],
+            email: [
+                "What is the official email for the electricity board?",
+                "Which email should I write to for this bill?"
+            ],
+            callback: [
+                "What number should I call to verify this bill?",
+                "Is there a helpline for this electricity issue?"
+            ]
+        },
+        fake_delivery: {
+            bank: [
+                "If there is a delivery fee, which account should I pay?",
+                "Which account is the delivery fee supposed to go to?"
+            ],
+            upi: [
+                "If I need to pay a delivery fee, which UPI ID should I use?",
+                "Which UPI ID is for this delivery?"
+            ],
+            link: [
+                "Which official tracking or payment link should I use?",
+                "Can you share the official courier link?"
+            ],
+            email: [
+                "What is the official email for the courier?",
+                "Which email should I write to for this parcel?"
+            ],
+            callback: [
+                "What number should I call to verify the delivery?",
+                "Is there a contact number for the courier?"
+            ]
+        },
+        kyc_update: {
+            link: [
+                "Which official KYC portal should I use?",
+                "Can you share the official KYC update link?"
+            ],
+            email: [
+                "What is the official email for KYC?",
+                "Which email should I write to for this KYC update?"
+            ],
+            callback: [
+                "What number should I call to confirm this KYC update?",
+                "Is there a helpline for this KYC issue?"
+            ]
+        },
+        upi_fraud: {
+            upi: [
+                "Which UPI ID should I use for the refund?",
+                "What is the UPI ID for this payment?"
+            ],
+            bank: [
+                "If not UPI, which bank account should I use?",
+                "Which account is this payment supposed to go to?"
+            ],
+            link: [
+                "Is there an official refund link I should open?",
+                "Which website should I use for this refund?"
+            ],
+            callback: [
+                "What number should I call to verify this refund?",
+                "Is there a contact number for this issue?"
+            ]
+        },
+        bank_fraud: {
+            link: [
+                "Which official bank link should I use?",
+                "Can you share the secure bank portal link?"
+            ],
+            email: [
+                "What is the official bank email for this?",
+                "Which email should I write to for verification?"
+            ]
+        }
+    };
+
+    const getRequiredOptions = (topic) => {
+        const type = String(scamType || '').toLowerCase();
+        const scenarioOptions = scenarioQuestionMap[type] && scenarioQuestionMap[type][topic];
+        return (scenarioOptions && scenarioOptions.length > 0) ? scenarioOptions : (requiredQuestionMap[topic] || []);
+    };
+
     const coversRequiredTopic = (topic, text) => {
         const t = String(text || '');
         if (topic === 'callback') return /\b(phone|callback|contact number|mobile|call back)\b/i.test(t);
@@ -336,7 +497,7 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
                 const startIndex = (turn - 1) % missingRequired.length;
                 for (let i = 0; i < missingRequired.length; i += 1) {
                     const topic = missingRequired[(startIndex + i) % missingRequired.length];
-                    const options = requiredQuestionMap[topic] || [];
+                    const options = getRequiredOptions(topic);
                     const pick = options.find(opt => !isRepeatedQuestion(opt)) || options[0];
                     if (pick) return pick;
                 }
