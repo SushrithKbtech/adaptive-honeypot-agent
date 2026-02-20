@@ -695,6 +695,7 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
 function normalizeFinalPayload(sessionData, agentResponse) {
     const now = Date.now();
     const durationSeconds = Math.round((now - sessionData.sessionStartMs) / 1000);
+    const compactIntel = buildCompactExtractedIntelligence(sessionData.extractedIntelligence);
 
     return {
         status: 'success',
@@ -708,33 +709,7 @@ function normalizeFinalPayload(sessionData, agentResponse) {
             : 0,
         redFlags: sessionData.redFlags || [],
         redFlagsSummary: sessionData.redFlagsSummary || '',
-        extractedIntelligence: {
-            phoneNumbers: sessionData.extractedIntelligence.phoneNumbers || [],
-            bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
-            upiIds: sessionData.extractedIntelligence.upiIds || [],
-            phishingLinks: sessionData.extractedIntelligence.phishingLinks || [],
-            emailAddresses: sessionData.extractedIntelligence.emailAddresses || [],
-            // Include other fields for completeness
-            trackingIds: sessionData.extractedIntelligence.trackingIds || [],
-            orderIds: sessionData.extractedIntelligence.orderIds || [],
-            policyNumbers: sessionData.extractedIntelligence.policyNumbers || [],
-            challanNumbers: sessionData.extractedIntelligence.challanNumbers || [],
-            consumerNumbers: sessionData.extractedIntelligence.consumerNumbers || [],
-            vehicleNumbers: sessionData.extractedIntelligence.vehicleNumbers || [],
-            employeeIds: sessionData.extractedIntelligence.employeeIds || [],
-            ifscCodes: sessionData.extractedIntelligence.ifscCodes || [],
-            amounts: sessionData.extractedIntelligence.amounts || [],
-            merchantNames: sessionData.extractedIntelligence.merchantNames || [],
-            orgNames: sessionData.extractedIntelligence.orgNames || [],
-            departmentNames: sessionData.extractedIntelligence.departmentNames || [],
-            supervisorNames: sessionData.extractedIntelligence.supervisorNames || [],
-            transactionIds: sessionData.extractedIntelligence.transactionIds || [],
-            callbackNumbers: sessionData.extractedIntelligence.callbackNumbers || [],
-            accountLast4: sessionData.extractedIntelligence.accountLast4 || [],
-            caseIds: sessionData.extractedIntelligence.caseIds || [],
-            appNames: sessionData.extractedIntelligence.appNames || [],
-            officerNames: sessionData.extractedIntelligence.officerNames || []
-        },
+        extractedIntelligence: compactIntel,
         engagementMetrics: {
             totalMessagesExchanged: sessionData.turnCount * 2,
             engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1
@@ -748,6 +723,38 @@ function normalizeFinalPayload(sessionData, agentResponse) {
 // GUVI HACKATHON CALLBACK ENDPOINT
 // ============================================================================
 const GUVI_CALLBACK_URL = 'https://hackathon.guvi.in/api/updateHoneyPotFinalResult';
+
+function buildCompactExtractedIntelligence(intel = {}) {
+    const base = {
+        phoneNumbers: intel.phoneNumbers || [],
+        bankAccounts: intel.bankAccounts || [],
+        upiIds: intel.upiIds || [],
+        phishingLinks: intel.phishingLinks || [],
+        emailAddresses: intel.emailAddresses || []
+    };
+
+    const optionalFields = [
+        'caseIds',
+        'orderIds',
+        'policyNumbers',
+        'trackingIds',
+        'challanNumbers',
+        'consumerNumbers',
+        'vehicleNumbers',
+        'employeeIds',
+        'transactionIds',
+        'amounts'
+    ];
+
+    for (const field of optionalFields) {
+        const values = intel[field];
+        if (Array.isArray(values) && values.length > 0) {
+            base[field] = values;
+        }
+    }
+
+    return base;
+}
 
 function buildRedFlagsSummary(redFlags = []) {
     if (!Array.isArray(redFlags) || redFlags.length === 0) return '';
@@ -848,6 +855,7 @@ async function sendGuviCallback(sessionData, conversationHistory) {
         const durationSeconds = Math.round((Date.now() - sessionData.sessionStartMs) / 1000);
 
         // Build payload per GUVI spec
+        const compactIntel = buildCompactExtractedIntelligence(sessionData.extractedIntelligence);
         const payload = {
             status: 'success',
             sessionId: sessionData.sessionId,
@@ -858,33 +866,7 @@ async function sendGuviCallback(sessionData, conversationHistory) {
             confidenceLevel: llmConfidenceLevel,
             redFlags: redFlags || [],
             redFlagsSummary: redFlagsSummary || '',
-            extractedIntelligence: {
-                bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
-                upiIds: sessionData.extractedIntelligence.upiIds || [],
-                phishingLinks: sessionData.extractedIntelligence.phishingLinks || [],
-                phoneNumbers: sessionData.extractedIntelligence.phoneNumbers || [],
-                emailAddresses: sessionData.extractedIntelligence.emailAddresses || [],
-                trackingIds: sessionData.extractedIntelligence.trackingIds || [],
-                orderIds: sessionData.extractedIntelligence.orderIds || [],
-                policyNumbers: sessionData.extractedIntelligence.policyNumbers || [],
-                challanNumbers: sessionData.extractedIntelligence.challanNumbers || [],
-                consumerNumbers: sessionData.extractedIntelligence.consumerNumbers || [],
-                vehicleNumbers: sessionData.extractedIntelligence.vehicleNumbers || [],
-                employeeIds: sessionData.extractedIntelligence.employeeIds || [],
-                ifscCodes: sessionData.extractedIntelligence.ifscCodes || [],
-                amounts: sessionData.extractedIntelligence.amounts || [],
-                merchantNames: sessionData.extractedIntelligence.merchantNames || [],
-                orgNames: sessionData.extractedIntelligence.orgNames || [],
-                departmentNames: sessionData.extractedIntelligence.departmentNames || [],
-                supervisorNames: sessionData.extractedIntelligence.supervisorNames || [],
-                callbackNumbers: sessionData.extractedIntelligence.callbackNumbers || [],
-                transactionIds: sessionData.extractedIntelligence.transactionIds || [],
-                accountLast4: sessionData.extractedIntelligence.accountLast4 || [],
-                caseIds: sessionData.extractedIntelligence.caseIds || [],
-                appNames: sessionData.extractedIntelligence.appNames || [],
-                officerNames: sessionData.extractedIntelligence.officerNames || [],
-                suspiciousKeywords: sessionData.extractedIntelligence.suspiciousKeywords || []
-            },
+            extractedIntelligence: compactIntel,
             agentNotes: agentNotes
         };
 
@@ -1188,38 +1170,14 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
 
         // Send custom callback if provided (for compatibility)
         if (callbackUrl) {
+            const compactIntel = buildCompactExtractedIntelligence(session.extractedIntelligence);
             const callbackPayload = shouldTerminate
                 ? normalizeFinalPayload(session, agentResponse)
                 : {
                     status: 'success',
                     reply: processedReply,
                     scamDetected: session.scamDetected,
-                    extractedIntelligence: {
-                        phoneNumbers: session.extractedIntelligence.phoneNumbers,
-                        bankAccounts: session.extractedIntelligence.bankAccounts,
-                        upiIds: session.extractedIntelligence.upiIds,
-                        phishingLinks: session.extractedIntelligence.phishingLinks,
-                        emailAddresses: session.extractedIntelligence.emailAddresses,
-                        trackingIds: session.extractedIntelligence.trackingIds,
-                        orderIds: session.extractedIntelligence.orderIds,
-                        policyNumbers: session.extractedIntelligence.policyNumbers,
-                        challanNumbers: session.extractedIntelligence.challanNumbers,
-                        consumerNumbers: session.extractedIntelligence.consumerNumbers,
-                        vehicleNumbers: session.extractedIntelligence.vehicleNumbers,
-                        employeeIds: session.extractedIntelligence.employeeIds,
-                        ifscCodes: session.extractedIntelligence.ifscCodes,
-                        amounts: session.extractedIntelligence.amounts,
-                        merchantNames: session.extractedIntelligence.merchantNames,
-                        orgNames: session.extractedIntelligence.orgNames,
-                        departmentNames: session.extractedIntelligence.departmentNames,
-                        supervisorNames: session.extractedIntelligence.supervisorNames,
-                        callbackNumbers: session.extractedIntelligence.callbackNumbers,
-                        transactionIds: session.extractedIntelligence.transactionIds,
-                        accountLast4: session.extractedIntelligence.accountLast4,
-                        caseIds: session.extractedIntelligence.caseIds,
-                        appNames: session.extractedIntelligence.appNames,
-                        officerNames: session.extractedIntelligence.officerNames
-                    },
+                    extractedIntelligence: compactIntel,
                     engagementMetrics: {
                         totalMessagesExchanged: session.turnCount * 2,
                         engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1
