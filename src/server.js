@@ -180,13 +180,37 @@ function sanitizeExtractedIntelligence(intel = {}) {
         return unique(outList);
     };
 
-    out.phoneNumbers = filterBy(out.phoneNumbers, [
-        /(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}\b/g
-    ]);
-    out.callbackNumbers = filterBy(out.callbackNumbers, [
-        /(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}\b/g
-    ]);
-    out.bankAccounts = filterDigits(out.bankAccounts, 9, 18);
+    const normalizePhone = (value) => stripEdge(value).replace(/\s+/g, ' ').trim();
+    const isLikelyPhoneDigits = (digits) => {
+        if (!digits) return false;
+        if (digits.length === 10) return true;
+        if (digits.length === 11 && digits.startsWith('0')) return true;
+        if (digits.length === 12 && digits.startsWith('91')) return true;
+        return false;
+    };
+    const filterPhones = (list) => {
+        const outList = [];
+        for (const v of (list || [])) {
+            const raw = normalizePhone(v);
+            if (!raw) continue;
+            if (/[A-Za-z]/.test(raw)) continue;
+            const digits = raw.replace(/\D/g, '');
+            if (!digits) continue;
+            const hasSep = /[+\s()-]/.test(raw);
+            // Require at least 10 digits for phone numbers to avoid case IDs like 2026-4718
+            if (isLikelyPhoneDigits(digits) || (hasSep && digits.length >= 10 && digits.length <= 13)) {
+                outList.push(raw);
+            }
+        }
+        return unique(outList);
+    };
+
+    out.phoneNumbers = filterPhones(out.phoneNumbers);
+    out.callbackNumbers = filterPhones(out.callbackNumbers);
+    out.bankAccounts = filterDigits(out.bankAccounts, 9, 18).filter((acc) => {
+        const digits = String(acc || '').replace(/\D/g, '');
+        return digits && !isLikelyPhoneDigits(digits);
+    });
     out.consumerNumbers = filterDigits(out.consumerNumbers, 6, 14);
     out.accountLast4 = filterDigits(out.accountLast4, 4, 4);
 
@@ -196,6 +220,14 @@ function sanitizeExtractedIntelligence(intel = {}) {
     out.emailAddresses = filterBy(out.emailAddresses, [
         /[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}\b/g
     ]);
+    if (out.upiIds.length > 0 && out.emailAddresses.length > 0) {
+        const emailSet = new Set(out.emailAddresses.map(e => e.toLowerCase()));
+        out.upiIds = out.upiIds.filter((u) => {
+            const lower = u.toLowerCase();
+            if (!emailSet.has(lower)) return true;
+            return /(upi|paytm|ybl|ibl|ok|fake|icici|hdfc|axis|sbi)/i.test(lower);
+        });
+    }
 
     // Canonicalize phishing links (full URLs only)
     if (Array.isArray(out.phishingLinks)) {
