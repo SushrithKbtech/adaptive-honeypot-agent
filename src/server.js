@@ -1025,6 +1025,15 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
                 .map(q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim())
                 .filter(Boolean)
         );
+        const hasValueForTopic = (topic) => {
+            const intel = session.extractedIntelligence || {};
+            if (topic === 'callback') return (intel.callbackNumbers || []).length > 0 || (intel.phoneNumbers || []).length > 0;
+            if (topic === 'upi') return (intel.upiIds || []).length > 0;
+            if (topic === 'bank') return (intel.bankAccounts || []).length > 0;
+            if (topic === 'link') return (intel.phishingLinks || []).length > 0;
+            if (topic === 'email') return (intel.emailAddresses || []).length > 0;
+            return false;
+        };
         const hasAsked = (re) => {
             for (const q of normalizedAsked) {
                 if (re.test(q)) return true;
@@ -1032,11 +1041,11 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             return false;
         };
         const missingRequired = [];
-        if (!hasAsked(/\b(phone|callback|contact number|mobile number|call back)\b/i)) missingRequired.push('callback');
-        if (!hasAsked(/\b(upi|upi id|upi handle)\b/i)) missingRequired.push('upi');
-        if (!hasAsked(/\b(bank account|account number|a\/c|account details)\b/i)) missingRequired.push('bank');
-        if (!hasAsked(/\b(link|url|website|portal)\b/i)) missingRequired.push('link');
-        if (!hasAsked(/\b(email|email address|email id)\b/i)) missingRequired.push('email');
+        if (!hasAsked(/\b(phone|callback|contact number|mobile number|call back)\b/i) && !hasValueForTopic('callback')) missingRequired.push('callback');
+        if (!hasAsked(/\b(upi|upi id|upi handle)\b/i) && !hasValueForTopic('upi')) missingRequired.push('upi');
+        if (!hasAsked(/\b(bank account|account number|a\/c|account details)\b/i) && !hasValueForTopic('bank')) missingRequired.push('bank');
+        if (!hasAsked(/\b(link|url|website|portal)\b/i) && !hasValueForTopic('link')) missingRequired.push('link');
+        if (!hasAsked(/\b(email|email address|email id)\b/i) && !hasValueForTopic('email')) missingRequired.push('email');
 
         const coversRequiredTopic = (topic, text) => {
             const t = String(text || '');

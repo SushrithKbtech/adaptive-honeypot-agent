@@ -1549,6 +1549,23 @@ Keywords:`;
 
     // 5. Indian English System Prompt (Enhanced with Reciprocity Trap & Strict Variety)
     const askedTopicsList = [...askedTopics].slice(0, 12).join(', ') || 'none';
+    const knownIntel = [];
+    if (extractedIntelligence.phoneNumbers && extractedIntelligence.phoneNumbers.length > 0) {
+      knownIntel.push(`phone ${extractedIntelligence.phoneNumbers.join(', ')}`);
+    }
+    if (extractedIntelligence.upiIds && extractedIntelligence.upiIds.length > 0) {
+      knownIntel.push(`UPI ${extractedIntelligence.upiIds.join(', ')}`);
+    }
+    if (extractedIntelligence.bankAccounts && extractedIntelligence.bankAccounts.length > 0) {
+      knownIntel.push(`bank account ${extractedIntelligence.bankAccounts.join(', ')}`);
+    }
+    if (extractedIntelligence.phishingLinks && extractedIntelligence.phishingLinks.length > 0) {
+      knownIntel.push(`link ${extractedIntelligence.phishingLinks.join(', ')}`);
+    }
+    if (extractedIntelligence.emailAddresses && extractedIntelligence.emailAddresses.length > 0) {
+      knownIntel.push(`email ${extractedIntelligence.emailAddresses.join(', ')}`);
+    }
+    const knownIntelText = knownIntel.length > 0 ? knownIntel.join('; ') : 'none';
     const prompt = `You are a real person texting a scammer on WhatsApp/SMS.
 Be natural, conversational, and not scripted. Start with emotion, add a small confusion/context line, then ask 1-2 short, specific questions.
 
@@ -1562,6 +1579,7 @@ Your state: ${personaInstructions}
 What you still need to ask: ${questioningStrategy}
 ${tacticalInstruction ? `Helpful angle: ${tacticalInstruction}` : ''}
 Already asked topics: ${askedTopicsList}
+Already known intel: ${knownIntelText}
 
 Rules:
 - 3-5 sentences, casual and human.
