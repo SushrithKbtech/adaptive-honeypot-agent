@@ -100,6 +100,12 @@ class AdaptiveHoneypotAgent {
         /\b[A-Z]{2}\d{9,12}[A-Z]?\b/g, // Standard postal
         /\b(?:awb|tracking|ref)[\s#:]*([A-Z0-9]{8,})\b/gi
       ],
+      orderIds: [
+        /\b(order|invoice|booking|ticket)\s*(?:id|no\.?|number)?\s*[:#-]?\s*([A-Z0-9-]{4,})\b/gi
+      ],
+      policyNumbers: [
+        /\bpolicy\s*(?:no\.?|number)?\s*[:#-]?\s*([A-Z0-9-]{4,})\b/gi
+      ],
       challanNumbers: [
         /\b[A-Z]{2}\d{8,20}\b/g, // General challan format
         /challan[\s#:]+([A-Z0-9]{8,})/gi
@@ -843,6 +849,8 @@ You are living inside the scammer’s story—just carefully.`
       phishingLinks: [],
       emailAddresses: [],
       trackingIds: [],
+      orderIds: [],
+      policyNumbers: [],
       challanNumbers: [],
       consumerNumbers: [],
       vehicleNumbers: [],
