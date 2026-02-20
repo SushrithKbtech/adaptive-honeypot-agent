@@ -730,13 +730,13 @@ function buildCompactExtractedIntelligence(intel = {}) {
         bankAccounts: intel.bankAccounts || [],
         upiIds: intel.upiIds || [],
         phishingLinks: intel.phishingLinks || [],
-        emailAddresses: intel.emailAddresses || []
+        emailAddresses: intel.emailAddresses || [],
+        caseIds: intel.caseIds || [],
+        policyNumbers: intel.policyNumbers || [],
+        orderIds: intel.orderIds || []
     };
 
     const optionalFields = [
-        'caseIds',
-        'orderIds',
-        'policyNumbers',
         'trackingIds',
         'challanNumbers',
         'consumerNumbers',
