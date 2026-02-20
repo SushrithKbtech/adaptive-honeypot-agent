@@ -6,7 +6,7 @@ Adaptive honeypot agent that detects scam patterns, keeps the scammer engaged, a
 ## Tech Stack
 - **Language/Framework:** Node.js (Express.js)
 - **Key Libraries:** OpenAI SDK, Express, Axios
-- **LLM/AI Models:** GPT-4o-mini
+- **LLM/AI Models:** GPT-4.1-mini
 
 ## Setup Instructions
 1. Clone the repository
