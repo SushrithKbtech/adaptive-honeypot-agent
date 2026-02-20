@@ -88,6 +88,7 @@ function getOrCreateSession(sessionId) {
                 appNames: [],
                 scammerNames: []
             },
+            redFlags: [],
             scamDetected: false,
             scamType: 'unknown',
             turnCount: 0,
@@ -541,6 +542,7 @@ function normalizeFinalPayload(sessionData, agentResponse) {
         engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1,
         scamType: sessionData.llmScamType || 'unknown',
         confidenceLevel: sessionData.llmConfidenceLevel || 'low',
+        redFlags: sessionData.redFlags || [],
         extractedIntelligence: {
             phoneNumbers: sessionData.extractedIntelligence.phoneNumbers || [],
             bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
@@ -603,13 +605,30 @@ async function sendGuviCallback(sessionData, conversationHistory) {
         sessionData.llmScamType = llmScamType;
         sessionData.llmConfidenceLevel = llmConfidenceLevel;
 
-        // Generate LLM-powered agent notes
+        // Generate structured red flags (LLM-first, heuristic fallback)
+        let redFlags = [];
+        try {
+            redFlags = await honeypotAgent.extractRedFlagsLLM(
+                conversationHistory,
+                llmScamType,
+                sessionData.extractedIntelligence
+            );
+        } catch (error) {
+            console.error('Error extracting red flags with LLM:', error);
+        }
+        if (!Array.isArray(redFlags) || redFlags.length === 0) {
+            redFlags = honeypotAgent.buildRedFlagsFromKeywords(sessionData.extractedIntelligence);
+        }
+        sessionData.redFlags = redFlags;
+
+        // Generate LLM-powered agent notes (include red flags)
         let agentNotes;
         try {
             agentNotes = await honeypotAgent.generateAgentNotes(
                 conversationHistory,
                 sessionData.extractedIntelligence,
-                llmScamType
+                llmScamType,
+                redFlags
             );
         } catch (error) {
             console.error('Error generating agent notes:', error);
@@ -627,6 +646,7 @@ async function sendGuviCallback(sessionData, conversationHistory) {
             engagementDurationSeconds: durationSeconds > 0 ? durationSeconds : 1,
             scamType: llmScamType,
             confidenceLevel: llmConfidenceLevel,
+            redFlags: redFlags || [],
             extractedIntelligence: {
                 bankAccounts: sessionData.extractedIntelligence.bankAccounts || [],
                 upiIds: sessionData.extractedIntelligence.upiIds || [],

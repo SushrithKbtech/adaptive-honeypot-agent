@@ -1564,6 +1564,7 @@ ${tacticalInstruction ? `Helpful angle: ${tacticalInstruction}` : ''}
 Rules:
 - 2-4 sentences, casual and human.
 - Ask 1-2 questions max, and keep them at the end.
+- Only ask for details that are relevant to this scam type or explicitly mentioned.
 - Avoid repeating earlier questions.
 - Avoid stock phrases like "just tell me one thing" or "I am trying only".
 - Use "sir" occasionally, not in every line.
@@ -1623,7 +1624,7 @@ Write the reply now (turn ${turnNumber}):`;
   // ============================================================================
   // GENERATE AGENT NOTES SUMMARY
   // ============================================================================
-  async generateAgentNotes(conversationHistory, extractedIntelligence, scamType) {
+  async generateAgentNotes(conversationHistory, extractedIntelligence, scamType, redFlags = []) {
     const scammerOnly = conversationHistory
       .filter(m => m.sender === 'scammer')
       .map(m => `SCAMMER: ${m.text}`)
@@ -1639,6 +1640,8 @@ Include:
 Keep it concise and natural.
 
 SCAM TYPE: ${scamType}
+RED FLAGS (structured, if any):
+${JSON.stringify(redFlags, null, 2)}
 SCAMMER MESSAGES:
 ${scammerOnly}
 
@@ -1659,7 +1662,85 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
       return completion.choices[0].message.content.trim();
     } catch (error) {
       console.error('Agent notes generation error:', error);
-      return this.buildAgentNotesSummary(scamType, extractedIntelligence);
+      return this.buildAgentNotesSummary(scamType, extractedIntelligence, redFlags);
+    }
+  }
+
+  // ============================================================================
+  // RED FLAG EXTRACTION (STRUCTURED)
+  // ============================================================================
+  buildRedFlagsFromKeywords(extractedIntelligence = {}) {
+    const keywords = new Set((extractedIntelligence.suspiciousKeywords || []).map(k => String(k).toLowerCase()));
+
+    const findEvidence = (re) => {
+      for (const k of keywords) {
+        if (re.test(k)) return k;
+      }
+      return '';
+    };
+
+    const flags = [];
+    const pushFlag = (type, re, severity, fallbackEvidence) => {
+      const evidence = findEvidence(re) || fallbackEvidence || '';
+      if (!evidence) return;
+      flags.push({ type, evidence, severity });
+    };
+
+    pushFlag('urgency', /\b(urgent|immediately|right now|last chance|act fast|hurry|fast)\b/i, 'high', 'urgent action');
+    pushFlag('otp_request', /\b(otp|pin|password|mpin)\b/i, 'critical', 'OTP request');
+    pushFlag('phishing_link', /\b(http|www\.|link|url|portal|site)\b/i, 'high', 'suspicious link');
+    pushFlag('payment_demand', /\b(pay|payment|fee|processing fee|transfer|deposit|upi)\b/i, 'high', 'payment requested');
+    pushFlag('threat', /\b(blocked|suspend|legal action|police|arrest|penalty|fine|deactivate)\b/i, 'high', 'threat of action');
+    pushFlag('authority_claim', /\b(bank|government|rbi|police|department|official)\b/i, 'medium', 'authority claim');
+    pushFlag('remote_access', /\b(anydesk|teamviewer|remote|apk|install)\b/i, 'critical', 'remote access request');
+
+    return flags.slice(0, 5);
+  }
+
+  async extractRedFlagsLLM(conversationHistory, scamType, extractedIntelligence = {}) {
+    try {
+      const conversation = conversationHistory
+        .filter(m => m.sender === 'scammer')
+        .map(m => `SCAMMER: ${m.text}`)
+        .join('\n');
+
+      const prompt = `Extract up to 5 red flags from the scammer messages.
+Return ONLY valid JSON array. Each item: { "type": "...", "evidence": "...", "severity": "low|medium|high|critical" }.
+Keep evidence short, directly quoted or paraphrased from the scammer.
+
+SCAM TYPE: ${scamType}
+SCAMMER MESSAGES:
+${conversation}
+
+EXTRACTED INTELLIGENCE (for context):
+${JSON.stringify(extractedIntelligence, null, 2)}`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: 'You extract structured red flags from scam messages. Output only JSON array.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0,
+        max_tokens: 200
+      });
+
+      const raw = completion.choices[0].message.content.trim();
+      const jsonMatch = raw.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return [];
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map(f => ({
+          type: String(f.type || '').trim(),
+          evidence: String(f.evidence || '').trim(),
+          severity: String(f.severity || '').trim() || 'medium'
+        }))
+        .filter(f => f.type && f.evidence)
+        .slice(0, 5);
+    } catch (error) {
+      console.error('Red flag LLM extraction error:', error);
+      return [];
     }
   }
 
@@ -1755,7 +1836,7 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
     return `This is a ${target} scam. ${notes}`;
   }
 
-  buildAgentNotesSummary(scamType, extractedIntelligence = {}) {
+  buildAgentNotesSummary(scamType, extractedIntelligence = {}, redFlags = []) {
     const labels = {
       bank_fraud: 'bank fraud',
       upi_fraud: 'UPI fraud',
@@ -1818,10 +1899,14 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
       intel.push(`ref ${extractedIntelligence.caseIds.join(', ')}`);
     }
 
-    const redFlags = flags.length > 0 ? flags.join(', ') : 'pressure tactics and verification demands';
+    const redFlagsText = flags.length > 0 ? flags.join(', ') : 'pressure tactics and verification demands';
+    const structuredFlags = Array.isArray(redFlags) && redFlags.length > 0
+      ? redFlags.map(f => f.type).filter(Boolean).join(', ')
+      : '';
     const intelText = intel.length > 0 ? ` Key intelligence: ${intel.join('; ')}.` : '';
 
-    return `This is a ${label} scam. Red flags include ${redFlags}.${intelText}`.trim();
+    const combinedFlags = structuredFlags ? `${redFlagsText}; ${structuredFlags}` : redFlagsText;
+    return `This is a ${label} scam. Red flags include ${combinedFlags}.${intelText}`.trim();
   }
 
   // ============================================================================
