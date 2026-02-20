@@ -70,6 +70,41 @@ class AdaptiveHoneypotAgent {
         keywords: ['tax', 'refund', 'itr', 'income tax'],
         persona: 'worried_obedient',
         priority_extractions: ['refund_amount', 'link', 'transaction_id']
+      },
+      loan_approval: {
+        keywords: ['loan', 'approval', 'approved', 'disbursal', 'disbursement', 'processing fee', 'pre-disbursal', 'emi'],
+        persona: 'concerned_practical',
+        priority_extractions: ['loan_amount', 'processing_fee', 'upi_id', 'bank_account']
+      },
+      job_scam: {
+        keywords: ['job', 'offer', 'offer letter', 'hr', 'interview', 'salary', 'joining', 'training fee'],
+        persona: 'cautious_questioning',
+        priority_extractions: ['company_name', 'official_email', 'employee_id', 'phone_number']
+      },
+      govt_scheme: {
+        keywords: ['government', 'govt', 'scheme', 'yojana', 'subsidy', 'pm', 'benefit'],
+        persona: 'worried_obedient',
+        priority_extractions: ['scheme_name', 'link', 'phone_number', 'bank_account']
+      },
+      customs_parcel: {
+        keywords: ['customs', 'parcel', 'duty', 'clearance', 'import', 'shipment', 'hold'],
+        persona: 'confused_curious',
+        priority_extractions: ['tracking_id', 'duty_amount', 'link', 'upi_id']
+      },
+      tech_support: {
+        keywords: ['microsoft', 'windows', 'virus', 'support', 'tech support', 'remote', 'teamviewer', 'anydesk'],
+        persona: 'cautious_questioning',
+        priority_extractions: ['app_name', 'employee_id', 'phone_number']
+      },
+      refund_scam: {
+        keywords: ['refund', 'reversal', 'chargeback', 'credited', 'refund pending'],
+        persona: 'concerned_practical',
+        priority_extractions: ['refund_amount', 'upi_id', 'transaction_id', 'phone_number']
+      },
+      insurance: {
+        keywords: ['insurance', 'policy', 'premium', 'lapsed', 'renewal', 'claim'],
+        persona: 'worried_obedient',
+        priority_extractions: ['policy_number', 'amount', 'link', 'phone_number']
       }
     };
 
@@ -617,7 +652,14 @@ class AdaptiveHoneypotAgent {
       ecommerce: 0,
       bank_fraud: 0,
       upi_fraud: 0,
-      investment_scam: 0
+      investment_scam: 0,
+      loan_approval: 0,
+      job_scam: 0,
+      govt_scheme: 0,
+      customs_parcel: 0,
+      tech_support: 0,
+      refund_scam: 0,
+      insurance: 0
     };
 
     // Prize / lucky draw / rewards
@@ -647,6 +689,27 @@ class AdaptiveHoneypotAgent {
     // Tax refund
     scores.tax_refund += score(/\b(income tax|itr|refund|tds|assessment|e-filing)\b/);
 
+    // Loan approval / disbursal
+    scores.loan_approval += score(/\b(loan|approved|approval|pre-?disbursal|disbursal|disbursement|emi|processing fee)\b/);
+
+    // Job scam
+    scores.job_scam += score(/\b(job|offer letter|interview|hr|salary|joining|training fee)\b/);
+
+    // Govt scheme
+    scores.govt_scheme += score(/\b(government|govt|scheme|yojana|subsidy|benefit)\b/);
+
+    // Customs parcel
+    scores.customs_parcel += score(/\b(customs|duty|clearance|import|shipment hold|parcel hold)\b/);
+
+    // Tech support
+    scores.tech_support += score(/\b(tech support|microsoft|windows|virus|malware|security alert|remote access|teamviewer|anydesk)\b/);
+
+    // Refund scam (generic)
+    scores.refund_scam += score(/\b(refund|reversal|chargeback|credited|refund pending)\b/);
+
+    // Insurance
+    scores.insurance += score(/\b(insurance|policy|premium|lapsed|renewal|claim)\b/);
+
     // Bank / OTP / transactions
     scores.bank_fraud += score(/\b(sbi|hdfc|icici|axis|kotak|pnb|bob|bank of baroda|state bank)\b/);
     scores.bank_fraud += score(/\b(bank|account|otp|mpin|pin|password|cvv|ifsc|transaction|debit|credit|fraud|blocked)\b/);
@@ -666,10 +729,15 @@ class AdaptiveHoneypotAgent {
       }
     }
 
-    // Tie-breakers: prefer "bank_fraud" when explicit bank names appear.
-    if (bestScore > 0 && scores.bank_fraud === bestScore && scores.upi_fraud < bestScore) {
-      best = 'bank_fraud';
-    }
+    // Tie-breakers: prefer specific categories when their keywords appear.
+    if (scores.loan_approval > 0 && scores.loan_approval === bestScore) best = 'loan_approval';
+    if (scores.job_scam > 0 && scores.job_scam === bestScore) best = 'job_scam';
+    if (scores.govt_scheme > 0 && scores.govt_scheme === bestScore) best = 'govt_scheme';
+    if (scores.customs_parcel > 0 && scores.customs_parcel === bestScore) best = 'customs_parcel';
+    if (scores.tech_support > 0 && scores.tech_support === bestScore) best = 'tech_support';
+    if (scores.refund_scam > 0 && scores.refund_scam === bestScore) best = 'refund_scam';
+    if (scores.insurance > 0 && scores.insurance === bestScore) best = 'insurance';
+    if (bestScore > 0 && scores.bank_fraud === bestScore && scores.upi_fraud < bestScore) best = 'bank_fraud';
 
     // If nothing matched significantly, default to general bank fraud behavior as it's safest
     if (bestScore <= 0) return 'bank_fraud';
@@ -1958,6 +2026,13 @@ Allowed scamType values:
 - investment_scam
 - apk_remote
 - tax_refund
+- loan_approval
+- job_scam
+- govt_scheme
+- customs_parcel
+- tech_support
+- refund_scam
+- insurance
 - phishing
 - other
 
@@ -1974,7 +2049,14 @@ Guidance:
 - "fake_delivery" if courier/parcel/tracking/customs/delivery fee is the focus.
 - "apk_remote" if AnyDesk/TeamViewer/remote access/app install is asked.
 - "investment_scam" if investment/crypto/returns/profit/trading is asked.
-- "tax_refund" if income tax/ITR/refund/assessment is asked.
+ - "tax_refund" if income tax/ITR/refund/assessment is asked.
+ - "loan_approval" if loan approval/disbursal/processing fee/pre-disbursal fee is asked.
+ - "job_scam" if job offer/HR/interview/salary/training fee is asked.
+ - "govt_scheme" if govt scheme/yojana/subsidy/benefit is asked.
+ - "customs_parcel" if customs duty/parcel hold/clearance is asked.
+ - "tech_support" if tech support/microsoft/windows/virus/remote access is asked.
+ - "refund_scam" if generic refund/reversal/chargeback is asked without a clear merchant.
+ - "insurance" if insurance policy/premium/lapse/renewal/claim is asked.
 - "phishing" if generic link click/credentials with no clear category.
 
 SCAMMER MESSAGES:
