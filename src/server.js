@@ -681,41 +681,48 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
         const processedReply = processed.text;
         const extractedQuestion = processed.question;
 
-        // Track the new question to prevent repetition
-        if (extractedQuestion) {
-            const normalized = extractedQuestion.toLowerCase().replace(/\s+/g, ' ').trim();
+        // Track all questions from the final reply to prevent repetition
+        const questionMatches = (processedReply.match(/[^.!?]*\?/g) || [])
+            .map(q => q.trim())
+            .filter(Boolean);
+        const questionsToTrack = questionMatches.length > 0 ? questionMatches : (extractedQuestion ? [extractedQuestion] : []);
+
+        const detectTopic = (q) => {
+            const text = String(q || '').toLowerCase();
+            if (/\b(callback|call back|contact number|phone number|mobile number|helpline|desk number)\b/i.test(text)) return 'callback';
+            if (/\b(employee id|emp id|staff id|id number)\b/i.test(text)) return 'empid';
+            if (/\b(email|email address|email id)\b/i.test(text)) return 'email';
+            if (/\b(department|which department)\b/i.test(text)) return 'dept';
+            if (/\b(link|website|url|portal)\b/i.test(text)) return 'link';
+            if (/\b(upi|account|bank account)\b/i.test(text)) return 'payment';
+            if (/\b(amount|fee|charge|payment)\b/i.test(text)) return 'amount';
+            if (/\b(transaction id|txn id|txnid)\b/i.test(text)) return 'txnid';
+            if (/\b(merchant|beneficiary)\b/i.test(text)) return 'merchant';
+            if (/\b(reference|case id|case number|complaint id|ticket)\b/i.test(text)) return 'caseid';
+            if (/\b(company|organisation|organization|brand)\b/i.test(text)) return 'org';
+            if (/\b(supervisor|manager|senior)\b/i.test(text)) return 'supervisor';
+            if (/\b(name|full name)\b/i.test(text)) return 'name';
+            if (/\b(address|office address|branch address)\b/i.test(text)) return 'address';
+            if (/\b(document|pan|aadhaar|aadhar|kyc)\b/i.test(text)) return 'documents';
+            if (/\b(app|application|apk|download)\b/i.test(text)) return 'app';
+            if (/\b(order id|order number|ticket id|booking id|invoice number)\b/i.test(text)) return 'orderid';
+            if (/\b(tracking|consignment)\b/i.test(text)) return 'tracking';
+            if (/\b(challan|violation)\b/i.test(text)) return 'challan';
+            if (/\b(consumer number|ca number)\b/i.test(text)) return 'consumer';
+            if (/\b(officer)\b/i.test(text)) return 'officer';
+            if (/\b(verify|verification|confirm)\b/i.test(text)) return 'verification';
+            if (/\b(process|procedure)\b/i.test(text)) return 'process';
+            if (/\b(lottery|prize|lucky draw)\b/i.test(text)) return 'lottery';
+            if (/\b(website|app|platform)\b/i.test(text)) return 'platform';
+            return 'general';
+        };
+
+        for (const q of questionsToTrack) {
+            const normalized = String(q || '').toLowerCase().replace(/\s+/g, ' ').trim();
             if (normalized && !session.askedQuestions.includes(normalized)) {
                 session.askedQuestions.push(normalized);
             }
-            const topic = (function detectTopic(q) {
-                const text = String(q || '').toLowerCase();
-                if (/\b(callback|call back|contact number|phone number|mobile number|helpline|desk number)\b/i.test(text)) return 'callback';
-                if (/\b(employee id|emp id|staff id|id number)\b/i.test(text)) return 'empid';
-                if (/\b(email|email address|email id)\b/i.test(text)) return 'email';
-                if (/\b(department|which department)\b/i.test(text)) return 'dept';
-                if (/\b(link|website|url|portal)\b/i.test(text)) return 'link';
-                if (/\b(upi|account|bank account)\b/i.test(text)) return 'payment';
-                if (/\b(amount|fee|charge|payment)\b/i.test(text)) return 'amount';
-                if (/\b(transaction id|txn id|txnid)\b/i.test(text)) return 'txnid';
-                if (/\b(merchant|beneficiary)\b/i.test(text)) return 'merchant';
-                if (/\b(reference|case id|case number|complaint id|ticket)\b/i.test(text)) return 'caseid';
-                if (/\b(company|organisation|organization|brand)\b/i.test(text)) return 'org';
-                if (/\b(supervisor|manager|senior)\b/i.test(text)) return 'supervisor';
-                if (/\b(name|full name)\b/i.test(text)) return 'name';
-                if (/\b(address|office address|branch address)\b/i.test(text)) return 'address';
-                if (/\b(document|pan|aadhaar|aadhar|kyc)\b/i.test(text)) return 'documents';
-                if (/\b(app|application|apk|download)\b/i.test(text)) return 'app';
-                if (/\b(order id|order number|ticket id|booking id|invoice number)\b/i.test(text)) return 'orderid';
-                if (/\b(tracking|consignment)\b/i.test(text)) return 'tracking';
-                if (/\b(challan|violation)\b/i.test(text)) return 'challan';
-                if (/\b(consumer number|ca number)\b/i.test(text)) return 'consumer';
-                if (/\b(officer)\b/i.test(text)) return 'officer';
-                if (/\b(verify|verification|confirm)\b/i.test(text)) return 'verification';
-                if (/\b(process|procedure)\b/i.test(text)) return 'process';
-                if (/\b(lottery|prize|lucky draw)\b/i.test(text)) return 'lottery';
-                if (/\b(website|app|platform)\b/i.test(text)) return 'platform';
-                return 'general';
-            })(extractedQuestion);
+            const topic = detectTopic(q);
             if (topic && !session.askedTopics.includes(topic)) {
                 session.askedTopics.push(topic);
             }
