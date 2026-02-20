@@ -200,7 +200,7 @@ class AdaptiveHoneypotAgent {
       { key: 'email', regex: /\b(email|e-mail|email address|email id|mail id)\b/i },
       { key: 'ifsc', regex: /\b(ifsc|ifsc code|branch code)\b/i },
       { key: 'empid', regex: /\b(employee id|emp id|staff id)\b/i },
-      { key: 'callback', regex: /\b(callback|call back|callback number|contact number|phone number|mobile number|number to call|call (?:you|u))\b/i },
+      { key: 'callback', regex: /\b(callback|call back|callback number|contact number|phone number|mobile number|helpline|toll[- ]?free|number to call|number should i call|which number.*call|call (?:you|u|me)|reach (?:you|u))\b/i },
       { key: 'address', regex: /\b(branch address|office address|full address|address of|located at)\b/i },
       { key: 'supervisor', regex: /\b(supervisor|manager|senior)\b/i },
       { key: 'txnid', regex: /\b(transaction id|txn id)\b/i },
@@ -542,15 +542,19 @@ class AdaptiveHoneypotAgent {
     }
     const selected = [];
     const selectedTopics = new Set();
+    const selectedNormalized = new Set();
 
     for (const q of questions) {
       if (selected.length >= 2) break;
       const topics = this.extractQuestionTopics(q);
+      const normQ = String(q || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      if (selectedNormalized.has(normQ)) continue;
       const isRepeat = [...topics].some(t => blockedTopics.has(t) || selectedTopics.has(t));
       if (topics.size > 0 && isRepeat) continue;
       if (recentQs.has(String(q).toLowerCase())) continue;
 
       selected.push(q.trim());
+      selectedNormalized.add(normQ);
       for (const t of topics) selectedTopics.add(t);
     }
 
@@ -576,6 +580,9 @@ class AdaptiveHoneypotAgent {
     let questionText = normalizeQ(selected[0]);
     if (selected.length > 1) {
       const q2 = normalizeQ(selected[1]);
+      if (normalizeQ(selected[0]).toLowerCase() === q2.toLowerCase()) {
+        return opener ? `${opener} ${questionText}`.replace(/\s+/g, ' ').trim() : questionText.trim();
+      }
       if (/^(also|and)\b/i.test(q2)) {
         questionText = `${questionText} ${q2}`;
       } else {

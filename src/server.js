@@ -329,7 +329,7 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
     };
 
     const missingRequired = [];
-    if (!hasAsked(/\b(phone|callback|contact number|mobile number|call back)\b/i)) missingRequired.push('callback');
+    if (!hasAsked(/\b(phone|callback|contact number|mobile number|call back|helpline|toll[- ]?free|number to call|number should i call|call (?:you|u|me)|reach (?:you|u))\b/i)) missingRequired.push('callback');
     if (!hasAsked(/\b(upi|upi id|upi handle)\b/i)) missingRequired.push('upi');
     if (!hasAsked(/\b(bank account|account number|a\/c|account details)\b/i)) missingRequired.push('bank');
     if (!hasAsked(/\b(link|url|website|portal)\b/i)) missingRequired.push('link');
@@ -526,7 +526,7 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
 
     const coversRequiredTopic = (topic, text) => {
         const t = String(text || '');
-        if (topic === 'callback') return /\b(phone|callback|contact number|mobile|call back)\b/i.test(t);
+        if (topic === 'callback') return /\b(phone|callback|contact number|mobile|call back|helpline|toll[- ]?free|number to call|number should i call|call (?:you|u|me)|reach (?:you|u))\b/i.test(t);
         if (topic === 'upi') return /\b(upi)\b/i.test(t);
         if (topic === 'bank') return /\b(bank account|account number|a\/c|account details)\b/i.test(t);
         if (topic === 'link') return /\b(link|url|website|portal)\b/i.test(t);
@@ -585,7 +585,7 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
 
     const detectQuestionTopic = (q) => {
         const text = String(q || '').toLowerCase();
-        if (/\b(callback|call back|contact number|phone number|mobile number|helpline|desk number)\b/i.test(text)) return 'callback';
+        if (/\b(callback|call back|contact number|phone number|mobile number|helpline|desk number|number to call|number should i call|call (?:you|u|me)|reach (?:you|u))\b/i.test(text) || (/\bcall\b/i.test(text) && /\bnumber\b/i.test(text))) return 'callback';
         if (/\b(employee id|emp id|staff id|id number)\b/i.test(text)) return 'empid';
         if (/\b(email|email address|email id)\b/i.test(text)) return 'email';
         if (/\b(department|which department)\b/i.test(text)) return 'dept';
@@ -662,7 +662,7 @@ function postProcessReply(reply, scammerText = '', turn = 0, askedQuestions = []
 
     // Find sentences with questions
     const questionSentences = sentences.filter(s => s.includes('?') ||
-        /\b(what|where|when|who|why|how|can you|could you|please tell|is there)\b/i.test(s));
+        /\b(what|which|where|when|who|why|how|can you|could you|please tell|is there)\b/i.test(s));
 
     // Find non-question sentences
     const statementSentences = sentences.filter(s => !questionSentences.includes(s));
@@ -901,7 +901,7 @@ async function sendGuviCallback(sessionData, conversationHistory) {
         };
 
         console.log(`📤 Sending final callback to GUVI...`);
-        console.log(`GUVI payload:\n${JSON.stringify(payload, null, 2)}`);
+        console.log(`GUVI payload: ${JSON.stringify(payload)}`);
 
         await axios.post(GUVI_CALLBACK_URL, payload, {
             headers: { 'Content-Type': 'application/json' },
@@ -1018,13 +1018,20 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             session.askedQuestions  // Pass previously asked questions
         );
 
+        // Merge intel early to avoid repeat questions in post-processing
+        const combinedIntelForReply = agentResponse?.metadata?.extractedIntelligence
+            ? mergeIntelligence({ ...session.extractedIntelligence }, agentResponse.metadata.extractedIntelligence)
+            : session.extractedIntelligence;
+        const blockedTopicsFromIntel = honeypotAgent.buildBlockedTopicsFromIntel(combinedIntelForReply);
+        const askedTopicsForPost = [...new Set([...(session.askedTopics || []), ...blockedTopicsFromIntel])];
+
         // Post-process reply to ensure 1-2 sentences with ONE question
         const processed = postProcessReply(
             agentResponse.reply,
             message.text,
             session.turnCount,
             session.askedQuestions,
-            session.askedTopics,
+            askedTopicsForPost,
             session.usedAsides,
             agentResponse?.metadata?.scamType || session.scamType
         );
@@ -1052,9 +1059,31 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
             }
             return false;
         };
-        const combinedIntel = agentResponse?.metadata?.extractedIntelligence
-            ? mergeIntelligence({ ...session.extractedIntelligence }, agentResponse.metadata.extractedIntelligence)
-            : session.extractedIntelligence;
+        const scammerHistoryText = (conversationHistory || [])
+            .filter(m => String(m.sender || '').toLowerCase() === 'scammer')
+            .map(m => m.text || '')
+            .join(' ') + ' ' + String(message.text || '');
+        const hasProvidedInHistory = (topic) => {
+            const text = String(scammerHistoryText || '');
+            if (topic === 'callback') {
+                return /(?:\+?\d{1,3}[-\s]?)?[6-9]\d{9}\b/.test(text);
+            }
+            if (topic === 'upi') {
+                return /\b[a-zA-Z0-9.\-_]{2,}@[a-zA-Z0-9.\-_]{2,}\b/.test(text);
+            }
+            if (topic === 'email') {
+                return /[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}\b/.test(text);
+            }
+            if (topic === 'link') {
+                return /(https?:\/\/|www\.)\S+/i.test(text);
+            }
+            if (topic === 'bank') {
+                if (/\b(account|a\/c)\b/i.test(text) && /\b\d{9,18}\b/.test(text)) return true;
+                return /\b\d{11,18}\b/.test(text);
+            }
+            return false;
+        };
+        const combinedIntel = combinedIntelForReply;
 
         const hasValueForTopicCombined = (topic) => {
             const intel = combinedIntel || {};
@@ -1067,15 +1096,15 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
         };
 
         const missingRequired = [];
-        if (!hasAsked(/\b(phone|callback|contact number|mobile number|call back|number to call|call (?:you|u))\b/i) && !hasValueForTopicCombined('callback')) missingRequired.push('callback');
-        if (!hasAsked(/\b(upi|upi id|upi handle)\b/i) && !hasValueForTopicCombined('upi')) missingRequired.push('upi');
-        if (!hasAsked(/\b(bank account|account number|a\/c|account details)\b/i) && !hasValueForTopicCombined('bank')) missingRequired.push('bank');
-        if (!hasAsked(/\b(link|url|website|portal)\b/i) && !hasValueForTopicCombined('link')) missingRequired.push('link');
-        if (!hasAsked(/\b(email|email address|email id)\b/i) && !hasValueForTopicCombined('email')) missingRequired.push('email');
+        if (!hasAsked(/\b(phone|callback|contact number|mobile number|call back|helpline|toll[- ]?free|number to call|number should i call|call (?:you|u|me)|reach (?:you|u))\b/i) && !hasValueForTopicCombined('callback') && !hasProvidedInHistory('callback')) missingRequired.push('callback');
+        if (!hasAsked(/\b(upi|upi id|upi handle)\b/i) && !hasValueForTopicCombined('upi') && !hasProvidedInHistory('upi')) missingRequired.push('upi');
+        if (!hasAsked(/\b(bank account|account number|a\/c|account details)\b/i) && !hasValueForTopicCombined('bank') && !hasProvidedInHistory('bank')) missingRequired.push('bank');
+        if (!hasAsked(/\b(link|url|website|portal)\b/i) && !hasValueForTopicCombined('link') && !hasProvidedInHistory('link')) missingRequired.push('link');
+        if (!hasAsked(/\b(email|email address|email id)\b/i) && !hasValueForTopicCombined('email') && !hasProvidedInHistory('email')) missingRequired.push('email');
 
         const coversRequiredTopic = (topic, text) => {
             const t = String(text || '');
-            if (topic === 'callback') return /\b(phone|callback|contact number|mobile|call back)\b/i.test(t);
+            if (topic === 'callback') return /\b(phone|callback|contact number|mobile|call back|helpline|toll[- ]?free|number to call|number should i call|call (?:you|u|me)|reach (?:you|u))\b/i.test(t);
             if (topic === 'upi') return /\b(upi)\b/i.test(t);
             if (topic === 'bank') return /\b(bank account|account number|a\/c|account details)\b/i.test(t);
             if (topic === 'link') return /\b(link|url|website|portal)\b/i.test(t);
@@ -1116,7 +1145,7 @@ app.post('/api/conversation', authenticateApiKey, async (req, res) => {
 
         const detectTopic = (q) => {
             const text = String(q || '').toLowerCase();
-            if (/\b(callback|call back|contact number|phone number|mobile number|helpline|desk number|number to call|call (?:you|u))\b/i.test(text)) return 'callback';
+            if (/\b(callback|call back|contact number|phone number|mobile number|helpline|desk number|number to call|number should i call|call (?:you|u|me)|reach (?:you|u))\b/i.test(text) || (/\bcall\b/i.test(text) && /\bnumber\b/i.test(text))) return 'callback';
             if (/\b(employee id|emp id|staff id|id number)\b/i.test(text)) return 'empid';
             if (/\b(email|email address|email id)\b/i.test(text)) return 'email';
             if (/\b(department|which department)\b/i.test(text)) return 'dept';
