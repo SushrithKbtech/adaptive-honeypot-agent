@@ -20,7 +20,7 @@ Adaptive honeypot agent that detects scam patterns, keeps the scammer engaged, a
 3. `npm start`
 
 ## API Endpoint
-- **URL:** `https://your-deployed-url.com/honeypot`
+- **URL:** `https://finalguvi-production.up.railway.app/api/conversation`
 - **Method:** `POST`
 - **Authentication:** `x-api-key` header
 
