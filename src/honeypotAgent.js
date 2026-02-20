@@ -1550,7 +1550,7 @@ Keywords:`;
     // 5. Indian English System Prompt (Enhanced with Reciprocity Trap & Strict Variety)
     const askedTopicsList = [...askedTopics].slice(0, 12).join(', ') || 'none';
     const prompt = `You are a real person texting a scammer on WhatsApp/SMS.
-Be natural, conversational, and not scripted. React with emotion and mild confusion first, then ask 1-2 short, specific questions.
+Be natural, conversational, and not scripted. Start with emotion, add a small confusion/context line, then ask 1-2 short, specific questions.
 
 Situation: ${scamType}
 Recent chat:
@@ -1564,14 +1564,15 @@ ${tacticalInstruction ? `Helpful angle: ${tacticalInstruction}` : ''}
 Already asked topics: ${askedTopicsList}
 
 Rules:
-- 2-4 sentences, casual and human.
+- 3-5 sentences, casual and human.
 - Ask 1-2 questions max, and keep them at the end.
 - Only ask for details that are relevant to this scam type or explicitly mentioned.
 - Avoid repeating earlier questions.
 - Avoid stock phrases like "just tell me one thing" or "I am trying only".
 - Use "sir" occasionally, not in every line.
 - If they already gave info, acknowledge briefly and ask the next thing.
-- Start with emotion (surprise/worry), add a small context confusion ("I wasn't expecting this", "trying to remember"), then ask around the details.
+- Start with emotion (surprise/worry), add a small context confusion ("I wasn't expecting this", "trying to remember").
+- Ask around details (order/claim/account/etc.) in a subtle, human way but still get the concrete intel.
 - Keep it like WhatsApp, not an email or support escalation.
 
 Write the reply now (turn ${turnNumber}):`;
@@ -1582,7 +1583,7 @@ Write the reply now (turn ${turnNumber}):`;
         messages: [
           {
             role: 'system',
-            content: 'You are a worried person texting on WhatsApp/SMS. Write like a real human: natural, slightly hesitant, context-aware. Start with emotion/confusion, then ask 1-2 short questions at the end. Avoid template phrases and avoid sounding like support.'
+            content: 'You are a worried person texting on WhatsApp/SMS. Write like a real human: natural, slightly hesitant, context-aware. Start with emotion + confusion, add a small personal context line, then ask 1-2 short questions at the end. Avoid template phrases and avoid sounding like support.'
           },
           {
             role: 'user',
