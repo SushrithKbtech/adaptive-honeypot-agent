@@ -81,8 +81,7 @@ class AdaptiveHoneypotAgent {
         /(?:\+?\d{1,3})[-\s]\d{6,14}\b/g
       ],
       upiIds: [
-        /[a-zA-Z0-9._-]+@[a-zA-Z]{3,}/g, // Standard UPI
-        /[6-9]\d{9}@[a-zA-Z]+/g // Phone based UPI
+        /\b[a-zA-Z0-9.\-_]{2,}@[a-zA-Z0-9.\-_]{2,}\b/g // Standard + phone UPI (keep exact)
       ],
       bankAccounts: [
         /\b\d{9,18}\b/g,
@@ -125,6 +124,7 @@ class AdaptiveHoneypotAgent {
         /\b[A-Z]{4}0[A-Z0-9]{6}\b/g
       ],
       caseIds: [
+        /\b[A-Z]{2,5}-\d{4}(?:-\d{2,6}){0,2}\b/gi,
         /\b(?:case|complaint|ref|reference|ticket)[\s#.:-]*([A-Z0-9-]{5,})\b/gi
       ],
       officerNames: [
@@ -983,12 +983,12 @@ You are living inside the scammer’s story—just carefully.`
     }
 
     // Additional context-based ID captures (will be cleaned later)
-    const challanContextMatches = allText.match(/\b(?:e-?challan|challan)[\s\w:.-]{0,25}[A-Z]{2,5}-?\d{3,10}\b/gi) || [];
+    const challanContextMatches = allText.match(/\b(?:e-?challan|challan)[\s\w:.-]{0,25}[A-Z]{2,5}-\d{3,10}(?:-\d{2,6}){0,2}\b/gi) || [];
     if (challanContextMatches.length > 0) {
       intelligence.challanNumbers.push(...challanContextMatches.map(m => m.trim()));
     }
 
-    const caseContextMatches = allText.match(/\b(?:case|reference|ref|ticket)[\s\w:.-]{0,25}[A-Z]{2,5}-?\d{3,10}\b/gi) || [];
+    const caseContextMatches = allText.match(/\b(?:case|reference|ref|ticket)[\s\w:.-]{0,25}[A-Z]{2,5}-\d{4}(?:-\d{2,6}){0,2}\b/gi) || [];
     if (caseContextMatches.length > 0) {
       intelligence.caseIds.push(...caseContextMatches.map(m => m.trim()));
     }
@@ -1116,7 +1116,8 @@ You are living inside the scammer’s story—just carefully.`
         const s = String(v || '').trim();
         if (!s) continue;
         const match =
-          s.match(/\b[A-Z]{1,5}[-]?\d{3,10}\b/i) ||
+          s.match(/\b[A-Z]{2,5}-\d{4}(?:-\d{2,6}){0,2}\b/i) ||
+          s.match(/\b[A-Z]{2,6}-\d{3,10}\b/i) ||
           s.match(/\b[A-Z0-9-]{5,}\b/i);
         const cleaned = match ? match[0] : s;
         if (requireDigit && !/\d/.test(cleaned)) continue;
@@ -1190,6 +1191,56 @@ You are living inside the scammer’s story—just carefully.`
     }
 
     intelligence.suspiciousKeywords = [...allKeywords];
+
+    // Canonicalize phishing links: keep full URLs only, dedupe by normalized form
+    if (intelligence.phishingLinks && intelligence.phishingLinks.length > 0) {
+      const rawLinks = intelligence.phishingLinks;
+      const normalizedMap = new Map();
+      const byHost = new Map();
+
+      const toUrl = (value) => {
+        let v = String(value || '').trim();
+        if (!v) return null;
+        if (!/^https?:\/\//i.test(v)) {
+          // If looks like a domain or www, add scheme
+          if (/^www\./i.test(v) || /\b[a-z0-9-]+\.[a-z]{2,}\b/i.test(v)) {
+            v = `https://${v}`;
+          } else {
+            return null;
+          }
+        }
+        try {
+          return new URL(v);
+        } catch {
+          return null;
+        }
+      };
+
+      for (const link of rawLinks) {
+        const url = toUrl(link);
+        if (!url) continue;
+        const host = url.hostname.toLowerCase();
+        const path = url.pathname.replace(/\/+$/, '');
+        const search = url.search || '';
+        const key = `${host}${path}${search}`.toLowerCase();
+        const canonical = `${url.protocol}//${host}${path}${search}`;
+        normalizedMap.set(key, canonical);
+        if (!byHost.has(host)) byHost.set(host, []);
+        byHost.get(host).push({ canonical, path, search });
+      }
+
+      // Drop root-only URLs when a deeper path exists for same host
+      const final = [];
+      for (const [host, list] of byHost.entries()) {
+        const hasDeep = list.some(item => item.path && item.path !== '/');
+        for (const item of list) {
+          if (hasDeep && (!item.path || item.path === '/')) continue;
+          final.push(item.canonical);
+        }
+      }
+
+      intelligence.phishingLinks = [...new Set(final)];
+    }
 
     return intelligence;
   }
@@ -1694,6 +1745,8 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
   // ============================================================================
   buildRedFlagsFromKeywords(extractedIntelligence = {}) {
     const keywords = new Set((extractedIntelligence.suspiciousKeywords || []).map(k => String(k).toLowerCase()));
+    const flags = [];
+    const used = new Set();
 
     const findEvidence = (re) => {
       for (const k of keywords) {
@@ -1702,22 +1755,43 @@ ${JSON.stringify(extractedIntelligence, null, 2)}`;
       return '';
     };
 
-    const flags = [];
-    const pushFlag = (type, re, severity, fallbackEvidence) => {
-      const evidence = findEvidence(re) || fallbackEvidence || '';
+    const addFlag = (type, re, severity) => {
+      const evidence = findEvidence(re);
       if (!evidence) return;
+      const key = `${type}:${evidence}`;
+      if (used.has(key)) return;
+      used.add(key);
       flags.push({ type, evidence, severity });
     };
 
-    pushFlag('urgency', /\b(urgent|immediately|right now|last chance|act fast|hurry|fast)\b/i, 'high', 'urgent action');
-    pushFlag('otp_request', /\b(otp|pin|password|mpin)\b/i, 'critical', 'OTP request');
-    pushFlag('phishing_link', /\b(http|www\.|link|url|portal|site)\b/i, 'high', 'suspicious link');
-    pushFlag('payment_demand', /\b(pay|payment|fee|processing fee|transfer|deposit|upi)\b/i, 'high', 'payment requested');
-    pushFlag('threat', /\b(blocked|suspend|legal action|police|arrest|penalty|fine|deactivate)\b/i, 'high', 'threat of action');
-    pushFlag('authority_claim', /\b(bank|government|rbi|police|department|official)\b/i, 'medium', 'authority claim');
-    pushFlag('remote_access', /\b(anydesk|teamviewer|remote|apk|install)\b/i, 'critical', 'remote access request');
+    addFlag('urgent_pressure', /\b(urgent|immediately|right now|last chance|act fast|hurry|fast|before it expires)\b/i, 'high');
+    addFlag('request_for_otp', /\b(otp|pin|password|mpin)\b/i, 'critical');
+    addFlag('phishing_link', /\b(http|www\.|link|url|portal|site)\b/i, 'critical');
+    addFlag('payment_demand', /\b(pay|payment|fee|processing fee|transfer|deposit|upi)\b/i, 'high');
+    addFlag('threat', /\b(blocked|suspend|legal action|police|arrest|penalty|fine|deactivate)\b/i, 'high');
+    addFlag('impersonation', /\b(bank|government|rbi|police|department|official|team)\b/i, 'medium');
+    addFlag('remote_access', /\b(anydesk|teamviewer|remote|apk|install)\b/i, 'critical');
 
-    return flags.slice(0, 5);
+    // Use concrete intel as evidence for additional flags
+    const link = (extractedIntelligence.phishingLinks || [])[0];
+    if (link) flags.push({ type: 'phishing_link', evidence: link, severity: 'critical' });
+    const upi = (extractedIntelligence.upiIds || [])[0];
+    if (upi) flags.push({ type: 'suspicious_upi_id', evidence: upi, severity: 'medium' });
+    const email = (extractedIntelligence.emailAddresses || [])[0];
+    if (email) flags.push({ type: 'unofficial_email', evidence: email, severity: 'medium' });
+
+    // If still below 5, use remaining keywords as evidence without inventing text
+    if (flags.length < 5) {
+      for (const k of keywords) {
+        const key = `manipulation:${k}`;
+        if (used.has(key)) continue;
+        used.add(key);
+        flags.push({ type: 'manipulation', evidence: k, severity: 'medium' });
+        if (flags.length >= 5) break;
+      }
+    }
+
+    return flags.slice(0, 10);
   }
 
   // ============================================================================

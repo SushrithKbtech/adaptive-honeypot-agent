@@ -191,17 +191,61 @@ function sanitizeExtractedIntelligence(intel = {}) {
     out.accountLast4 = filterDigits(out.accountLast4, 4, 4);
 
     out.upiIds = filterBy(out.upiIds, [
-        /[a-zA-Z0-9._-]+@[a-zA-Z]{2,}\b/g
+        /\b[a-zA-Z0-9.\-_]{2,}@[a-zA-Z0-9.\-_]{2,}\b/g
     ]);
     out.emailAddresses = filterBy(out.emailAddresses, [
         /[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}\b/g
     ]);
 
-    out.phishingLinks = filterBy(out.phishingLinks, [
-        /https?:\/\/[^\s]+/i,
-        /www\.[^\s]+/i,
-        /\b[a-z0-9-]+\.(?:com|in|org|net|xyz|click|site|top|online)(?:\/[^\s]*)?\b/i
-    ]);
+    // Canonicalize phishing links (full URLs only)
+    if (Array.isArray(out.phishingLinks)) {
+        const rawLinks = out.phishingLinks;
+        const normalizedMap = new Map();
+        const byHost = new Map();
+
+        const toUrl = (value) => {
+            let v = stripEdge(value);
+            if (!v) return null;
+            if (!/^https?:\/\//i.test(v)) {
+                if (/^www\./i.test(v) || /\b[a-z0-9-]+\.[a-z]{2,}\b/i.test(v)) {
+                    v = `https://${v}`;
+                } else {
+                    return null;
+                }
+            }
+            try {
+                return new URL(v);
+            } catch {
+                return null;
+            }
+        };
+
+        for (const link of rawLinks) {
+            const url = toUrl(link);
+            if (!url) continue;
+            const host = url.hostname.toLowerCase();
+            const path = url.pathname.replace(/\/+$/, '');
+            const search = url.search || '';
+            const key = `${host}${path}${search}`.toLowerCase();
+            const canonical = `${url.protocol}//${host}${path}${search}`;
+            normalizedMap.set(key, canonical);
+            if (!byHost.has(host)) byHost.set(host, []);
+            byHost.get(host).push({ canonical, path, search });
+        }
+
+        const final = [];
+        for (const [host, list] of byHost.entries()) {
+            const hasDeep = list.some(item => item.path && item.path !== '/');
+            for (const item of list) {
+                if (hasDeep && (!item.path || item.path === '/')) continue;
+                final.push(item.canonical);
+            }
+        }
+
+        out.phishingLinks = unique(final);
+    } else {
+        out.phishingLinks = [];
+    }
 
     out.amounts = filterBy(out.amounts, [
         /(?:₹|rs\.?|inr)\s*[\d,]+(?:\.\d+)?/i,
@@ -210,9 +254,10 @@ function sanitizeExtractedIntelligence(intel = {}) {
         /\b\d{3,7}\b/
     ]);
 
-    const idRegex = /\b[A-Z]{2,6}-?\d{3,12}\b/i;
-    out.employeeIds = filterBy(out.employeeIds, [idRegex]);
-    out.caseIds = filterBy(out.caseIds, [idRegex, /\b(?:REF|CASE|TICKET|CLAIM)[-:\s]?[A-Z0-9-]{3,}\b/i]);
+    const hyphenIdRegex = /\b[A-Z]{2,5}-\d{4}(?:-\d{2,6}){0,2}\b/i;
+    const shortIdRegex = /\b[A-Z]{2,6}-\d{3,12}\b/i;
+    out.employeeIds = filterBy(out.employeeIds, [hyphenIdRegex, shortIdRegex]);
+    out.caseIds = filterBy(out.caseIds, [hyphenIdRegex, /\b(?:REF|CASE|TICKET|CLAIM)[-:\s]?[A-Z0-9-]{3,}\b/i]);
     out.challanNumbers = filterBy(out.challanNumbers, [idRegex]);
     out.trackingIds = filterBy(out.trackingIds, [/\b[A-Z0-9]{8,}\b/i]);
     out.orderIds = filterBy(out.orderIds, [
@@ -802,7 +847,7 @@ async function sendGuviCallback(sessionData, conversationHistory) {
         if (!Array.isArray(redFlags) || redFlags.length === 0) {
             redFlags = honeypotAgent.buildRedFlagsFromKeywords(sessionData.extractedIntelligence);
         }
-        // Ensure at least 5 red flags
+        // Ensure at least 5 red flags without inventing evidence
         if (redFlags.length < 5) {
             const extra = honeypotAgent.buildRedFlagsFromKeywords(sessionData.extractedIntelligence);
             const seen = new Set(redFlags.map(f => `${f.type}:${f.evidence}`));
@@ -813,25 +858,6 @@ async function sendGuviCallback(sessionData, conversationHistory) {
                     seen.add(key);
                 }
                 if (redFlags.length >= 5) break;
-            }
-        }
-        if (redFlags.length < 5) {
-            const link = (sessionData.extractedIntelligence.phishingLinks || [])[0];
-            const upi = (sessionData.extractedIntelligence.upiIds || [])[0];
-            const email = (sessionData.extractedIntelligence.emailAddresses || [])[0];
-            const fillers = [
-                { type: 'urgency', evidence: 'urgent action', severity: 'high' },
-                { type: 'otp_request', evidence: 'OTP/PIN requested', severity: 'critical' },
-                { type: 'payment_demand', evidence: upi ? `UPI requested (${upi})` : 'payment requested', severity: 'high' },
-                { type: 'phishing_link', evidence: link ? `suspicious link (${link})` : 'suspicious link', severity: 'high' },
-                { type: 'authority_claim', evidence: email ? `official email claim (${email})` : 'official/department claim', severity: 'medium' }
-            ];
-            for (const f of fillers) {
-                if (redFlags.length >= 5) break;
-                const key = `${f.type}:${f.evidence}`;
-                if (!redFlags.find(r => `${r.type}:${r.evidence}` === key)) {
-                    redFlags.push(f);
-                }
             }
         }
         const redFlagsSummary = buildRedFlagsSummary(redFlags);
