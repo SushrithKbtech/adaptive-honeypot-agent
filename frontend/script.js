@@ -419,6 +419,272 @@ function startFreshConversation(autoPlay) {
 }
 
 /* ============================================================================
+   MINI-APPS — the rest of the home screen actually does something once the
+   phone is on. All state here is in-memory only, reset on full reboot.
+============================================================================ */
+const appState = {
+  settings: [
+    { key: "wifi", icon: "📶", label: "Wi-Fi", on: true },
+    { key: "bt", icon: "🔵", label: "Bluetooth", on: false },
+    { key: "airplane", icon: "✈️", label: "Airplane Mode", on: false },
+    { key: "notif", icon: "🔔", label: "Notifications", on: true },
+    { key: "dark", icon: "🌙", label: "Dark Mode", on: true }
+  ],
+  cameraShots: 0,
+  mailViewingDetail: false,
+  game: { order: [], index: 0, score: 0, answered: false }
+};
+
+function goHome() {
+  showScreen("home");
+}
+
+function wireAppNavigation() {
+  document.querySelectorAll(".app-back[data-back]").forEach((btn) => {
+    btn.addEventListener("click", goHome);
+  });
+  $("wa-back-btn").addEventListener("click", goHome);
+
+  $("icon-phone").addEventListener("click", () => {
+    renderCallLog();
+    showScreen("phone");
+  });
+  $("icon-camera").addEventListener("click", () => showScreen("camera"));
+  $("icon-settings").addEventListener("click", () => {
+    renderSettings();
+    showScreen("settings");
+  });
+  $("icon-gallery").addEventListener("click", () => {
+    renderGallery();
+    showScreen("gallery");
+  });
+  $("icon-mail").addEventListener("click", () => {
+    appState.mailViewingDetail = false;
+    renderMailList();
+    showScreen("mail");
+  });
+  $("icon-game").addEventListener("click", () => {
+    startGame();
+    showScreen("game");
+  });
+
+  $("camera-shutter").addEventListener("click", captureCameraShot);
+
+  $("mail-back-btn").addEventListener("click", () => {
+    if (appState.mailViewingDetail) {
+      appState.mailViewingDetail = false;
+      renderMailList();
+    } else {
+      goHome();
+    }
+  });
+
+  $("game-btn-legit").addEventListener("click", () => answerGame(false));
+  $("game-btn-scam").addEventListener("click", () => answerGame(true));
+  $("game-next").addEventListener("click", nextGameQuestion);
+  $("game-replay").addEventListener("click", startGame);
+}
+
+// ---- Phone: call log ----
+function renderCallLog() {
+  const log = $("call-log");
+  log.innerHTML = "";
+  SCENARIOS.filter((s) => s.verdict === "scam").forEach((sc, i) => {
+    const row = document.createElement("div");
+    row.className = "call-log__item";
+    row.innerHTML = `
+      <div class="call-log__avatar">${sc.icon}</div>
+      <div class="call-log__info">
+        <div class="call-log__name">${sc.contactName}</div>
+        <div class="call-log__meta">Missed call · ${sc.contactSub}</div>
+      </div>
+      <div class="call-log__time">${9 + i}:0${i}${i % 2 ? " PM" : " AM"}</div>`;
+    row.addEventListener("click", () => showCallToast(sc.contactName));
+    log.appendChild(row);
+  });
+}
+
+async function showCallToast(name) {
+  const toast = $("call-toast");
+  toast.textContent = `Calling ${name}…`;
+  toast.classList.remove("hidden");
+  await sleep(20);
+  toast.classList.add("is-shown");
+  await sleep(1300);
+  toast.textContent = "No answer — straight to voicemail";
+  await sleep(1400);
+  toast.classList.remove("is-shown");
+  await sleep(300);
+  toast.classList.add("hidden");
+}
+
+// ---- Camera ----
+function captureCameraShot() {
+  const flash = $("camera-flash");
+  flash.classList.add("is-firing");
+  setTimeout(() => flash.classList.remove("is-firing"), 400);
+
+  appState.cameraShots += 1;
+  const strip = $("camera-strip");
+  const thumb = document.createElement("div");
+  thumb.className = "camera-thumb";
+  const hues = ["#2dd4bf", "#fb7185", "#fbbf24", "#818cf8", "#f472b6"];
+  thumb.style.background = hues[appState.cameraShots % hues.length];
+  thumb.textContent = "📸";
+  strip.appendChild(thumb);
+  while (strip.children.length > 8) strip.removeChild(strip.firstChild);
+}
+
+// ---- Settings ----
+function renderSettings() {
+  const list = $("settings-list");
+  list.innerHTML = "";
+  appState.settings.forEach((row) => {
+    const el = document.createElement("div");
+    el.className = "settings-row";
+    el.innerHTML = `
+      <span class="settings-row__icon">${row.icon}</span>
+      <span class="settings-row__label">${row.label}</span>
+      <button class="settings-toggle${row.on ? " is-on" : ""}" aria-label="${row.label}"></button>`;
+    el.querySelector(".settings-toggle").addEventListener("click", (e) => {
+      row.on = !row.on;
+      e.currentTarget.classList.toggle("is-on", row.on);
+    });
+    list.appendChild(el);
+  });
+}
+
+// ---- Gallery: case files pulled straight from the scenario data ----
+function renderGallery() {
+  const grid = $("gallery-grid");
+  grid.innerHTML = "";
+  SCENARIOS.forEach((sc) => {
+    const card = document.createElement("div");
+    card.className = "gallery-card";
+    card.innerHTML = `
+      <span class="gallery-card__icon">${sc.icon}</span>
+      <span class="gallery-card__label">${sc.label}</span>
+      <span class="gallery-card__teaser">${sc.teaser || ""}</span>
+      <span class="gallery-card__badge ${sc.verdict}">${sc.verdict === "scam" ? "🚩 flagged" : "✅ clean"}</span>`;
+    grid.appendChild(card);
+  });
+}
+
+// ---- Mail ----
+function renderMailList() {
+  $("mail-header-title").textContent = "Spam Folder";
+  $("mail-detail").classList.add("hidden");
+  const list = $("mail-list");
+  list.classList.remove("hidden");
+  list.innerHTML = "";
+  MAIL_ITEMS.forEach((item, i) => {
+    const row = document.createElement("div");
+    row.className = "mail-item";
+    row.innerHTML = `
+      <div class="mail-item__top">
+        <span class="mail-item__from">${item.from}</span>
+        <span class="mail-item__dot ${item.flag}"></span>
+      </div>
+      <div class="mail-item__subject">${item.subject}</div>
+      <div class="mail-item__preview">${item.preview}</div>`;
+    row.addEventListener("click", () => openMailItem(i));
+    list.appendChild(row);
+  });
+}
+
+function openMailItem(index) {
+  const item = MAIL_ITEMS[index];
+  appState.mailViewingDetail = true;
+  $("mail-header-title").textContent = item.from;
+  $("mail-list").classList.add("hidden");
+  const detail = $("mail-detail");
+  detail.classList.remove("hidden");
+  detail.innerHTML = `
+    <span class="mail-detail__flag ${item.flag}">${item.flag === "scam" ? "🚩 likely scam" : "✅ looks legitimate"}</span>
+    <div class="mail-detail__subject">${item.subject}</div>
+    <div class="mail-detail__from">From: ${item.from}</div>
+    <div class="mail-detail__body">${item.body}</div>`;
+}
+
+// ---- Scam Spotter game ----
+function shuffledIndices(n) {
+  const arr = Array.from({ length: n }, (_, i) => i);
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function startGame() {
+  appState.game.order = shuffledIndices(GAME_QUESTIONS.length);
+  appState.game.index = 0;
+  appState.game.score = 0;
+  appState.game.answered = false;
+  $("game-final").classList.add("hidden");
+  $("game-body").classList.remove("hidden");
+  renderGameQuestion();
+}
+
+function renderGameQuestion() {
+  const { order, index } = appState.game;
+  const q = GAME_QUESTIONS[order[index]];
+  appState.game.answered = false;
+  $("game-progress").textContent = `Round ${index + 1} / ${order.length}`;
+  $("game-score").textContent = `Score: ${appState.game.score}`;
+  $("game-card").textContent = q.text;
+  $("game-feedback").classList.add("hidden");
+  $("game-next").classList.add("hidden");
+  $("game-buttons").classList.remove("hidden");
+  $("game-btn-legit").disabled = false;
+  $("game-btn-scam").disabled = false;
+}
+
+function answerGame(guessedScam) {
+  if (appState.game.answered) return;
+  appState.game.answered = true;
+  const { order, index } = appState.game;
+  const q = GAME_QUESTIONS[order[index]];
+  const correct = guessedScam === q.isScam;
+  if (correct) appState.game.score += 1;
+
+  $("game-btn-legit").disabled = true;
+  $("game-btn-scam").disabled = true;
+  $("game-score").textContent = `Score: ${appState.game.score}`;
+
+  const feedback = $("game-feedback");
+  feedback.classList.remove("hidden", "is-correct", "is-wrong");
+  feedback.classList.add(correct ? "is-correct" : "is-wrong");
+  const verdictLabel = q.isScam ? "This was a scam." : "This was legitimate.";
+  feedback.textContent = `${correct ? "✅ Correct!" : "❌ Not quite."} ${verdictLabel} ${q.explain}`;
+
+  $("game-next").classList.remove("hidden");
+}
+
+function nextGameQuestion() {
+  appState.game.index += 1;
+  if (appState.game.index >= appState.game.order.length) {
+    showGameFinal();
+    return;
+  }
+  renderGameQuestion();
+}
+
+function showGameFinal() {
+  $("game-body").classList.add("hidden");
+  const final = $("game-final");
+  final.classList.remove("hidden");
+  const total = appState.game.order.length;
+  const score = appState.game.score;
+  $("game-final-score").textContent = `${score} / ${total}`;
+  let msg = "Not bad — a few more rounds and you'll spot every one.";
+  if (score === total) msg = "Perfect score! You'd make a great honeypot yourself.";
+  else if (score >= total * 0.7) msg = "Sharp eyes — you caught most of them.";
+  else if (score <= total * 0.3) msg = "These scams are sneaky — that's exactly why the agent exists.";
+  $("game-final-msg").textContent = msg;
+}
+
+/* ============================================================================
    CONTROLS
 ============================================================================ */
 function wireControls() {
@@ -517,6 +783,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPicker();
   updateWaHeader();
   wireControls();
+  wireAppNavigation();
   checkApiStatus();
   initSimulationObserver();
 });

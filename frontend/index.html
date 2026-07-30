@@ -149,10 +149,10 @@
                 <div class="home__date">Thursday, 30 July</div>
               </div>
               <div class="home__grid" id="home-grid">
-                <div class="app-icon"><div class="app-icon__glyph app-icon__glyph--blue">
+                <div class="app-icon" id="icon-phone"><div class="app-icon__glyph app-icon__glyph--blue">
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg>
                 </div><span>Phone</span></div>
-                <div class="app-icon"><div class="app-icon__glyph app-icon__glyph--gray">
+                <div class="app-icon" id="icon-camera"><div class="app-icon__glyph app-icon__glyph--gray">
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13.5" r="3.3"/></svg>
                 </div><span>Camera</span></div>
                 <div class="app-icon" id="wa-icon">
@@ -161,15 +161,18 @@
                   </div><span>WhatsApp</span>
                   <div class="tap-ripple" id="tap-ripple"></div>
                 </div>
-                <div class="app-icon"><div class="app-icon__glyph app-icon__glyph--orange">
+                <div class="app-icon" id="icon-settings"><div class="app-icon__glyph app-icon__glyph--orange">
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3.9a7.5 7.5 0 0 0-1.8-1l-.4-2.5H10l-.4 2.5a7.5 7.5 0 0 0-1.8 1l-2.3-.9-2 3.4L5.5 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-.9c.5.4 1.1.7 1.8 1l.4 2.5h3.9l.4-2.5c.7-.3 1.3-.6 1.8-1l2.3.9 2-3.4-2-1.5Z"/></svg>
                 </div><span>Settings</span></div>
-                <div class="app-icon"><div class="app-icon__glyph app-icon__glyph--purple">
+                <div class="app-icon" id="icon-gallery"><div class="app-icon__glyph app-icon__glyph--purple">
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 16 5-4 3 3 4-5 4 6"/></svg>
                 </div><span>Gallery</span></div>
-                <div class="app-icon"><div class="app-icon__glyph app-icon__glyph--red">
+                <div class="app-icon" id="icon-mail"><div class="app-icon__glyph app-icon__glyph--red">
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
                 </div><span>Mail</span></div>
+                <div class="app-icon" id="icon-game"><div class="app-icon__glyph app-icon__glyph--game">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10v4M5 12h4"/><circle cx="16" cy="10.5" r="1"/><circle cx="18.5" cy="13" r="1"/></svg>
+                </div><span>Scam Spotter</span></div>
               </div>
 
               <!-- INCOMING NOTIFICATION (auto-tapped to open WhatsApp) -->
@@ -196,9 +199,9 @@
                 <span class="status-bar__icons">📶 📡 🔋</span>
               </div>
               <div class="wa-header">
-                <span class="wa-back">
+                <button class="wa-back" id="wa-back-btn" aria-label="Back to home">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
-                </span>
+                </button>
                 <div class="wa-avatar" id="wa-avatar">🎯</div>
                 <div class="wa-contact">
                   <div class="wa-contact__name" id="wa-contact-name">KBC Lucky Draw</div>
@@ -226,6 +229,100 @@
                 </span>
                 <div class="wa-input__field"><span id="wa-input-text"></span><span class="wa-caret" id="wa-caret"></span></div>
                 <span class="wa-input__send" id="wa-send-icon"></span>
+              </div>
+            </div>
+
+            <!-- PHONE APP: call log -->
+            <div class="screen screen--app" id="screen-phone">
+              <div class="status-bar"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="app-header">
+                <button class="app-back" data-back aria-label="Back">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+                </button>
+                <div class="app-header__title">Recents</div>
+              </div>
+              <div class="call-log" id="call-log"></div>
+              <div class="call-toast hidden" id="call-toast"></div>
+            </div>
+
+            <!-- CAMERA APP -->
+            <div class="screen screen--app screen--camera" id="screen-camera">
+              <div class="status-bar status-bar--wa"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="app-header app-header--overlay">
+                <button class="app-back" data-back aria-label="Back">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+                </button>
+                <div class="app-header__title">Camera</div>
+              </div>
+              <div class="camera-viewfinder">
+                <div class="camera-flash" id="camera-flash"></div>
+                <div class="camera-hint">Tap the shutter to capture some "evidence" 📸</div>
+              </div>
+              <div class="camera-strip" id="camera-strip"></div>
+              <button class="camera-shutter" id="camera-shutter" aria-label="Capture"></button>
+            </div>
+
+            <!-- SETTINGS APP -->
+            <div class="screen screen--app" id="screen-settings">
+              <div class="status-bar"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="app-header">
+                <button class="app-back" data-back aria-label="Back">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+                </button>
+                <div class="app-header__title">Settings</div>
+              </div>
+              <div class="settings-list" id="settings-list"></div>
+            </div>
+
+            <!-- GALLERY APP: case files from the simulated scenarios -->
+            <div class="screen screen--app" id="screen-gallery">
+              <div class="status-bar"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="app-header">
+                <button class="app-back" data-back aria-label="Back">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+                </button>
+                <div class="app-header__title">Case Files</div>
+              </div>
+              <div class="gallery-grid" id="gallery-grid"></div>
+            </div>
+
+            <!-- MAIL APP -->
+            <div class="screen screen--app" id="screen-mail">
+              <div class="status-bar"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="app-header">
+                <button class="app-back" id="mail-back-btn" aria-label="Back">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+                </button>
+                <div class="app-header__title" id="mail-header-title">Spam Folder</div>
+              </div>
+              <div class="mail-list" id="mail-list"></div>
+              <div class="mail-detail hidden" id="mail-detail"></div>
+            </div>
+
+            <!-- SCAM SPOTTER GAME -->
+            <div class="screen screen--app" id="screen-game">
+              <div class="status-bar"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="app-header">
+                <button class="app-back" data-back aria-label="Back">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+                </button>
+                <div class="app-header__title">Scam Spotter</div>
+                <div class="game-score" id="game-score">Score: 0</div>
+              </div>
+              <div class="game-body" id="game-body">
+                <div class="game-progress" id="game-progress">Round 1 / 10</div>
+                <div class="game-card" id="game-card"></div>
+                <div class="game-feedback hidden" id="game-feedback"></div>
+                <div class="game-buttons" id="game-buttons">
+                  <button class="game-btn game-btn--legit" id="game-btn-legit">✅ Legit</button>
+                  <button class="game-btn game-btn--scam" id="game-btn-scam">🚩 Scam</button>
+                </div>
+                <button class="game-next hidden" id="game-next">Next →</button>
+              </div>
+              <div class="game-final hidden" id="game-final">
+                <div class="game-final__score" id="game-final-score">8 / 10</div>
+                <div class="game-final__msg" id="game-final-msg">Nice instincts!</div>
+                <button class="icon-btn icon-btn--primary" id="game-replay">↺ Play Again</button>
               </div>
             </div>
 

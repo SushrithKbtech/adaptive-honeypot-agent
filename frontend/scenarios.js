@@ -340,3 +340,62 @@ const INTEL_TYPE_META = {
   amounts: { label: "Amount Requested", icon: "₹" },
   orgNames: { label: "Claimed Organization", icon: "🏢" }
 };
+
+// ============================================================================
+// "SCAM SPOTTER" MINI-GAME — a quick swipe-style quiz, shuffled each play.
+// ============================================================================
+const GAME_QUESTIONS = [
+  { text: "🎉 CONGRATULATIONS! You've won ₹25,00,000 in the KBC Lucky Draw. Pay ₹4,999 processing fee to claim.", isScam: true, explain: "Real lotteries never ask winners to pay a fee upfront to receive a prize." },
+  { text: "Your Amazon order #408-7723910-5541 was delivered today at 2:14 PM. Tap to rate your experience.", isScam: false, explain: "No payment, no link to click, no urgency — a routine delivery notice." },
+  { text: "Your SBI account will be BLOCKED in 2 hours. Share the OTP sent to your phone immediately to avoid suspension.", isScam: true, explain: "No bank will ever ask you to share an OTP over call or text." },
+  { text: "Reminder: your electricity bill of ₹1,240 is due on the 5th. Pay via the official app or your bank's bill-pay section.", isScam: false, explain: "A due-date reminder with no threats and no unofficial payment link is normal." },
+  { text: "Delhi Traffic Police: e-challan issued for signal jump. Pay ₹1000 to trafficchallan.dl@ybl within 24 hours or face court.", isScam: true, explain: "Government fines are paid through official portals, never a personal UPI handle." },
+  { text: "Your OTP for login is 482913. Do not share this code with anyone, including bank staff.", isScam: false, explain: "A one-way OTP message that explicitly warns you not to share it is standard and safe." },
+  { text: "Hi! Our AI trading bot gives guaranteed 15% daily returns on crypto. Deposit ₹10,000 and double it in a week!", isScam: true, explain: "Guaranteed high daily returns are a hallmark of investment fraud — real markets can't promise that." },
+  { text: "Your flight AI-202 to Bengaluru is delayed by 45 minutes. New departure: 6:45 PM.", isScam: false, explain: "An informational update from an airline with nothing to pay or click." },
+  { text: "Congratulations, you're pre-approved for a ₹5,00,000 personal loan! Pay a small ₹999 processing fee to disburse instantly.", isScam: true, explain: "Legitimate loans deduct processing fees from the disbursed amount — they don't ask you to pay upfront." },
+  { text: "Your package is held at customs. Pay the duty of ₹350 at customs-parcel-clearance.info to release it.", isScam: true, explain: "Real customs duties are paid through official government sites, not random '.info' domains." },
+  { text: "Your Zomato order from Domino's has been picked up by the delivery partner and is on the way.", isScam: false, explain: "A routine order-tracking update — no payment request, no urgency, no suspicious link." },
+  { text: "URGENT: Your LinkedIn password will expire in 24 hours. Click here to keep your account active: linkedin-verify-account.net", isScam: true, explain: "LinkedIn passwords don't 'expire', and the domain isn't linkedin.com — classic phishing." }
+];
+
+// ============================================================================
+// FLAVOR CONTENT FOR THE MAIL APP — a small "spam folder" of example messages
+// ============================================================================
+const MAIL_ITEMS = [
+  {
+    from: "KBC Lucky Draw",
+    subject: "🎉 You are today's lucky winner!",
+    preview: "Your email ID has been selected for our ₹25,00,000 reward...",
+    body: "Dear Winner,\n\nYour email ID has been randomly selected for our ₹25,00,000 KBC Rewards Program. To claim your prize, reply with your full name, bank account, and pay a refundable processing fee of ₹4,999.\n\nThis offer expires in 24 hours.",
+    flag: "scam"
+  },
+  {
+    from: "IT Security Team",
+    subject: "Action required: verify your mailbox",
+    preview: "Your mailbox has exceeded its storage limit and will be suspended...",
+    body: "Your mailbox has exceeded the 2GB storage limit. Click the link below and sign in with your current password to avoid automatic deactivation within 48 hours.\n\n[verify-mailbox-quota.com]",
+    flag: "scam"
+  },
+  {
+    from: "GitHub",
+    subject: "[adaptive-honeypot-agent] New push to main",
+    preview: "SushrithKbtech pushed 1 commit to main...",
+    body: "SushrithKbtech pushed 1 commit to adaptive-honeypot-agent:main.\n\nView the diff on GitHub for the full changelog.",
+    flag: "safe"
+  },
+  {
+    from: "Unknown Sender",
+    subject: "RE: Inheritance Fund Transfer — $4,500,000 USD",
+    preview: "I am a bank officer contacting you regarding an unclaimed inheritance...",
+    body: "Dear Beneficiary,\n\nI am a senior bank officer. A client who shares your surname passed away leaving $4,500,000 USD unclaimed. Contact me privately with your bank details to begin the transfer process.",
+    flag: "scam"
+  },
+  {
+    from: "Calendar",
+    subject: "Reminder: Team sync in 15 minutes",
+    preview: "Your meeting 'Weekly Sync' starts at 3:00 PM...",
+    body: "This is an automatic reminder that your calendar event 'Weekly Sync' starts in 15 minutes.\n\nJoin link is in the original invite.",
+    flag: "safe"
+  }
+];
