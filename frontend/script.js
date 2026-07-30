@@ -484,7 +484,7 @@ function startFreshConversation(autoPlay) {
   state.clockMinutes = 41;
 
   removeTyping();
-  $("sim-messages").innerHTML = '<div class="wa-encryption-note">🔒 Messages are simulated for this demo — no live model calls</div>';
+  $("sim-messages").innerHTML = '<div class="wa-encryption-note">🔒 A recorded replay of real agent responses — no live model calls</div>';
   resetIntelPanel();
   $("sim-report").classList.add("hidden");
   hideVerdictBanner();
