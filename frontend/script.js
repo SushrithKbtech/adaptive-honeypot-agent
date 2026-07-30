@@ -699,30 +699,117 @@ const call = {
 const SpeechRecognitionCtor =
   window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
-function speak(text) {
-  if (!("speechSynthesis" in window)) return;
-  try {
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = 1.02;
-    utter.pitch = 0.95;
-    const inVoice = window.speechSynthesis
-      .getVoices()
-      .find((v) => /en-IN|hi-IN/i.test(v.lang));
-    if (inVoice) utter.voice = inVoice;
-    window.speechSynthesis.speak(utter);
-  } catch (e) {
-    /* speech is a nice-to-have; never let it break the call UI */
-  }
+// The call is deliberately audio-only — no transcript — so it feels like a
+// real phone call. These just drive the little equaliser + hint line.
+function setCallViz(mode, hint) {
+  const viz = $("call-viz");
+  viz.classList.toggle("is-active", mode === "them" || mode === "you");
+  viz.classList.toggle("is-them", mode === "them");
+  viz.classList.toggle("is-you", mode === "you");
+  if (hint !== undefined) $("call-hint").textContent = hint;
 }
 
-function addCallLine(who, text) {
-  const el = document.createElement("div");
-  el.className = `call-line call-line--${who}`;
-  el.innerHTML = `<span class="call-line__who">${who === "them" ? "Scammer" : "You"}</span>`;
-  el.appendChild(document.createTextNode(text));
-  $("call-transcript").appendChild(el);
-  $("call-transcript").scrollTop = $("call-transcript").scrollHeight;
+// Pick the most human-sounding voice available, preferring Indian English
+// (matching the scam personas), then any neural/"natural" voice, then any
+// English one. Voices load async in some browsers, hence the re-query.
+let cachedVoice = null;
+function pickVoice() {
+  if (cachedVoice) return cachedVoice;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  cachedVoice =
+    voices.find((v) => /en-IN/i.test(v.lang) && /natural|neural|online/i.test(v.name)) ||
+    voices.find((v) => /en-IN/i.test(v.lang)) ||
+    voices.find((v) => /^en/i.test(v.lang) && /natural|neural|online/i.test(v.name)) ||
+    voices.find((v) => /^en/i.test(v.lang)) ||
+    voices[0];
+  return cachedVoice;
+}
+if ("speechSynthesis" in window) {
+  window.speechSynthesis.onvoiceschanged = () => { cachedVoice = null; };
+}
+
+// Reading a whole paragraph in one flat utterance is what makes TTS sound
+// robotic. Splitting on punctuation and varying rate/pitch per clause —
+// with small pauses between — gets much closer to how a person actually
+// talks on the phone.
+// Emoji read aloud as "party popper" and bare symbols like ₹ / @ get
+// mangled, so normalise the text into something speakable first.
+function speakableText(text) {
+  return String(text)
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, " ")
+    .replace(/₹\s?/g, "rupees ")
+    .replace(/\bRs\.?\s?/gi, "rupees ")
+    .replace(/@/g, " at ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function splitIntoClauses(text) {
+  return speakableText(text)
+    .split(/(?<=[.!?,;:])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function emotionFor(text) {
+  const t = text.toLowerCase();
+  if (/urgent|immediately|hurry|expire|blocked|suspend|arrest|court|disconnect/.test(t)) {
+    return { rate: 1.12, pitch: 1.06, gap: 130 };   // pushy / pressuring
+  }
+  if (/congratulations|won|winner|prize|selected|lucky/.test(t)) {
+    return { rate: 1.06, pitch: 1.14, gap: 170 };   // falsely upbeat
+  }
+  if (/\?$/.test(text.trim())) {
+    return { rate: 0.98, pitch: 1.08, gap: 200 };   // question lilt
+  }
+  return { rate: 1.0, pitch: 0.98, gap: 190 };      // neutral, matter-of-fact
+}
+
+function speak(text, onDone) {
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    if (typeof onDone === "function") onDone();
+  };
+
+  if (!("speechSynthesis" in window)) {
+    // No TTS at all — approximate the speaking duration so turn-taking
+    // still paces naturally instead of the caller going silent.
+    setTimeout(done, Math.min(9000, 1400 + text.length * 45));
+    return;
+  }
+
+  try {
+    window.speechSynthesis.cancel();
+    const voice = pickVoice();
+    const clauses = splitIntoClauses(text);
+    let i = 0;
+
+    const speakNext = () => {
+      if (finished) return;
+      if (i >= clauses.length) { done(); return; }
+      const clause = clauses[i];
+      const mood = emotionFor(clause);
+      i += 1;
+
+      const utter = new SpeechSynthesisUtterance(clause);
+      if (voice) utter.voice = voice;
+      // Small per-clause jitter keeps it from sounding metronomic.
+      utter.rate = mood.rate + (Math.random() * 0.06 - 0.03);
+      utter.pitch = mood.pitch + (Math.random() * 0.06 - 0.03);
+      utter.onend = () => setTimeout(speakNext, mood.gap);
+      utter.onerror = () => setTimeout(speakNext, mood.gap);
+      window.speechSynthesis.speak(utter);
+    };
+
+    speakNext();
+    // Safety net: some browsers never fire onend when the tab is muted.
+    setTimeout(done, Math.min(20000, 3000 + text.length * 75));
+  } catch (e) {
+    done();
+  }
 }
 
 // The scammer's spoken script: reuse the scenario's own scammer lines so the
@@ -751,7 +838,7 @@ async function startCall(scenarioId) {
   $("call-avatar").textContent = scenario.icon;
   $("call-name").textContent = scenario.contactName;
   $("call-status").textContent = "calling…";
-  $("call-transcript").innerHTML = "";
+  setCallViz("idle", "");
   $("call-listening").classList.add("hidden");
   $("call-typed").classList.toggle("hidden", !!SpeechRecognitionCtor);
   showScreen("call");
@@ -777,8 +864,15 @@ function speakNextScammerLine() {
   const lines = scammerCallLines(call.scenario);
   const line = lines[call.lineIndex % lines.length];
   call.lineIndex += 1;
-  addCallLine("them", line);
-  speak(line);
+  const myCallId = call.id;
+
+  setCallViz("them", "");
+  speak(line, () => {
+    if (!call.active || call.id !== myCallId) return;
+    setCallViz("idle", SpeechRecognitionCtor
+      ? "Tap the mic and reply out loud"
+      : "Type your reply below");
+  });
 }
 
 function endCall() {
@@ -793,8 +887,11 @@ function endCall() {
 
 function handleUserSpoke(text) {
   if (!call.active || !text.trim()) return;
-  addCallLine("you", text.trim());
-  setTimeout(() => speakNextScammerLine(), 900);
+  setCallViz("you", "");
+  setTimeout(() => {
+    if (!call.active) return;
+    speakNextScammerLine();
+  }, 900);
 }
 
 function startListening() {
@@ -821,6 +918,7 @@ function startListening() {
 
   call.recognition = rec;
   call.recognizing = true;
+  setCallViz("you", "");
   $("call-listening").classList.remove("hidden");
   $("call-mic").classList.add("is-recording");
   try {
