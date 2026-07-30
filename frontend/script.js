@@ -421,12 +421,12 @@ async function checkApiStatus() {
   const text = $("api-status-text");
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
+    const timer = setTimeout(() => controller.abort(), 9000);
     const res = await fetch("https://honeypot-api-8r4t.onrender.com/health", { signal: controller.signal });
     clearTimeout(timer);
     if (res.ok) {
       dot.classList.add("is-online");
-      text.textContent = "Live backend running on Railway";
+      text.textContent = "Live backend running";
       return;
     }
     throw new Error("not ok");
