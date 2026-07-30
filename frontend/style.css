@@ -251,6 +251,11 @@ ul { margin: 0; padding: 0; list-style: none; }
 .phone__screen {
   position: relative; width: 100%; height: 100%; border-radius: 32px; overflow: hidden;
   background: #000;
+  /* Chrome fails to clip composited (transformed/animated) descendants to a
+     border-radius unless the clipping container is its own stacking context
+     with a compositor layer — without this, hovering an app icon (scale
+     transform) makes the rounded corners render square. */
+  isolation: isolate; transform: translateZ(0);
 }
 .screen {
   position: absolute; inset: 0; opacity: 0; pointer-events: none;
@@ -439,6 +444,19 @@ ul { margin: 0; padding: 0; list-style: none; }
   font-size: 0.82rem; color: var(--ph-wa-text); border: none; outline: none; font-family: var(--sans);
 }
 .wa-live-input::placeholder { color: var(--ph-wa-sub); }
+
+/* ---- Offline state (Wi-Fi off / airplane mode) ---- */
+.wa-offline-banner {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 7px 12px; font-size: 0.72rem; flex: 0 0 auto;
+  background: #fdf3d0; color: #5b4a12;
+}
+.wa-offline-banner__spinner {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid rgba(91,74,18,0.25); border-top-color: #5b4a12;
+  animation: boot-spin .9s linear infinite;
+}
+.msg__tick--pending { color: var(--ph-wa-sub); }
 .wa-inputbar.is-live .wa-live-input { display: block; }
 .wa-inputbar.is-live .wa-input__field { display: none; }
 .wa-inputbar.is-live .wa-input__send { cursor: pointer; }
@@ -774,6 +792,54 @@ ul { margin: 0; padding: 0; list-style: none; }
 }
 .game-final__score { font-family: var(--display); font-size: 2.4rem; font-weight: 700; color: var(--teal-strong); }
 .game-final__msg { font-size: 0.9rem; color: var(--ph-text-dim); margin-bottom: 8px; }
+
+/* ---- In-call screen ---- */
+.screen--call {
+  background: linear-gradient(185deg, #123a33 0%, #0d1f26 55%, #070d12 100%);
+  padding-bottom: 18px;
+}
+.call-top { text-align: center; padding: 14px 18px 8px; flex: 0 0 auto; }
+.call-avatar {
+  width: 76px; height: 76px; border-radius: 50%; margin: 0 auto 12px;
+  background: linear-gradient(160deg,#3a4a5c,#202c33);
+  display: flex; align-items: center; justify-content: center; font-size: 2rem;
+}
+.call-name { font-size: 1.05rem; font-weight: 600; color: #e9edef; }
+.call-status { font-size: 0.76rem; color: #8696a0; margin-top: 3px; font-family: var(--mono); }
+
+.call-transcript {
+  flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;
+}
+.call-line { max-width: 88%; font-size: 0.8rem; line-height: 1.45; padding: 8px 11px; border-radius: 12px; animation: msg-in .3s ease; }
+.call-line--them { align-self: flex-start; background: rgba(255,255,255,0.09); color: #e9edef; border-bottom-left-radius: 3px; }
+.call-line--you { align-self: flex-end; background: rgba(45,212,191,0.18); color: #d3fff8; border-bottom-right-radius: 3px; }
+.call-line__who { display: block; font-size: 0.6rem; opacity: .6; margin-bottom: 2px; text-transform: uppercase; letter-spacing: .04em; }
+
+.call-listening {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  font-size: 0.72rem; color: var(--teal-strong); font-family: var(--mono); padding: 4px 0; flex: 0 0 auto;
+}
+.call-listening__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); animation: pulse-listen 1s infinite; }
+@keyframes pulse-listen { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.75); } }
+
+.call-typed { padding: 6px 16px 2px; flex: 0 0 auto; }
+.call-typed__input {
+  width: 100%; background: rgba(255,255,255,0.09); border: none; outline: none;
+  border-radius: 18px; padding: 9px 14px; color: #e9edef; font-size: 0.8rem; font-family: var(--sans);
+}
+.call-typed__input::placeholder { color: #8696a0; }
+
+.call-actions { display: flex; justify-content: center; gap: 26px; padding: 12px 0 6px; flex: 0 0 auto; }
+.call-btn {
+  width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer;
+  font-size: 1.3rem; display: flex; align-items: center; justify-content: center;
+  transition: transform .12s, box-shadow .15s;
+}
+.call-btn:active { transform: scale(0.92); }
+.call-btn--mic { background: rgba(255,255,255,0.14); color: #fff; }
+.call-btn--mic.is-recording { background: var(--teal); color: #04120f; box-shadow: 0 0 0 6px rgba(45,212,191,0.22); }
+.call-btn--end { background: #e5484d; color: #fff; transform: rotate(135deg); }
+.call-btn--end:active { transform: rotate(135deg) scale(0.92); }
 
 /* ---- Control Center (pull down from the top of any screen) ---- */
 .drag-zone { position: absolute; top: 0; left: 0; right: 0; height: 46px; z-index: 40; touch-action: none; }

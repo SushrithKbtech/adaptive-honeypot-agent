@@ -226,10 +226,23 @@ function scrollChatToBottom() {
   body.scrollTop = body.scrollHeight;
 }
 
+// True when the phone's own toggles say it has connectivity — WhatsApp
+// delivery ticks and live replies key off this, like the real app.
+function isOnline() {
+  const get = (key) => appState.settings.find((s) => s.key === key);
+  return get("wifi").on && !get("airplane").on;
+}
+
 function appendMessage(who, text) {
   const wrap = document.createElement("div");
   wrap.className = `msg msg--${who}`;
-  const tick = who === "agent" ? '<span class="msg__tick">✓✓</span>' : "";
+  // Offline sends show WhatsApp's pending clock instead of ticks until
+  // connectivity comes back (deliverPendingMessages upgrades them).
+  const tick = who === "agent"
+    ? (isOnline()
+      ? '<span class="msg__tick">✓✓</span>'
+      : '<span class="msg__tick msg__tick--pending" title="Waiting for network">🕓</span>')
+    : "";
   wrap.innerHTML = `
     <div class="msg__bubble">
       <span class="msg__text"></span>
@@ -238,6 +251,21 @@ function appendMessage(who, text) {
   wrap.querySelector(".msg__text").textContent = text;
   $("sim-messages").appendChild(wrap);
   scrollChatToBottom();
+}
+
+// Called when connectivity is restored: pending clocks become ticks, and if
+// the user had sent live messages into the void, one queued reply arrives.
+function deliverPendingMessages() {
+  const pending = document.querySelectorAll(".msg__tick--pending");
+  if (pending.length === 0) return;
+  pending.forEach((el) => {
+    el.textContent = "✓✓";
+    el.classList.remove("msg__tick--pending");
+    el.removeAttribute("title");
+  });
+  if ($("wa-inputbar").classList.contains("is-live")) {
+    setTimeout(() => replyToLiveMessage(), 600);
+  }
 }
 
 function appendTyping(who) {
@@ -492,6 +520,9 @@ function sendLiveMessage() {
 }
 
 async function replyToLiveMessage() {
+  // No network, no reply — the message just sits there with its pending
+  // clock until connectivity returns (see deliverPendingMessages).
+  if (!isOnline()) return;
   const runId = state.runId;
   appendTyping("scammer");
   await sleep(900 + Math.random() * 700);
@@ -644,23 +675,187 @@ function renderCallLog() {
         <div class="call-log__meta">Missed call · ${sc.contactSub}</div>
       </div>
       <div class="call-log__time">${9 + i}:0${i}${i % 2 ? " PM" : " AM"}</div>`;
-    row.addEventListener("click", () => showCallToast(sc.contactName));
+    row.addEventListener("click", () => startCall(sc.id));
     log.appendChild(row);
   });
 }
 
-async function showCallToast(name) {
-  const toast = $("call-toast");
-  toast.textContent = `Calling ${name}…`;
-  toast.classList.remove("hidden");
-  await sleep(20);
-  toast.classList.add("is-shown");
-  await sleep(1300);
-  toast.textContent = "No answer — straight to voicemail";
-  await sleep(1400);
-  toast.classList.remove("is-shown");
-  await sleep(300);
-  toast.classList.add("hidden");
+/* ============================================================================
+   VOICE CALL — the scammer's lines are spoken aloud via the browser's
+   speechSynthesis (TTS); your replies come in through SpeechRecognition
+   (the mic) where the browser supports it, with a typed box as fallback.
+   Everything is local to the browser — nothing is recorded or uploaded.
+============================================================================ */
+const call = {
+  active: false,
+  scenario: null,
+  lineIndex: 0,
+  timerId: null,
+  seconds: 0,
+  recognition: null,
+  recognizing: false
+};
+
+const SpeechRecognitionCtor =
+  window.SpeechRecognition || window.webkitSpeechRecognition || null;
+
+function speak(text) {
+  if (!("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1.02;
+    utter.pitch = 0.95;
+    const inVoice = window.speechSynthesis
+      .getVoices()
+      .find((v) => /en-IN|hi-IN/i.test(v.lang));
+    if (inVoice) utter.voice = inVoice;
+    window.speechSynthesis.speak(utter);
+  } catch (e) {
+    /* speech is a nice-to-have; never let it break the call UI */
+  }
+}
+
+function addCallLine(who, text) {
+  const el = document.createElement("div");
+  el.className = `call-line call-line--${who}`;
+  el.innerHTML = `<span class="call-line__who">${who === "them" ? "Scammer" : "You"}</span>`;
+  el.appendChild(document.createTextNode(text));
+  $("call-transcript").appendChild(el);
+  $("call-transcript").scrollTop = $("call-transcript").scrollHeight;
+}
+
+// The scammer's spoken script: reuse the scenario's own scammer lines so the
+// call matches what that scam actually says over chat.
+function scammerCallLines(scenario) {
+  return scenario.messages.filter((m) => m.who === "scammer").map((m) => m.text);
+}
+
+async function startCall(scenarioId) {
+  const scenario = SCENARIOS.find((s) => s.id === scenarioId) || SCENARIOS[0];
+
+  // Tear down any call already in flight, otherwise its 1s timer keeps
+  // running alongside the new one and the duration races ahead.
+  if (call.timerId) clearInterval(call.timerId);
+  call.timerId = null;
+  stopListening();
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+
+  const callId = (call.id || 0) + 1;
+  call.id = callId;
+  call.active = true;
+  call.scenario = scenario;
+  call.lineIndex = 0;
+  call.seconds = 0;
+
+  $("call-avatar").textContent = scenario.icon;
+  $("call-name").textContent = scenario.contactName;
+  $("call-status").textContent = "calling…";
+  $("call-transcript").innerHTML = "";
+  $("call-listening").classList.add("hidden");
+  $("call-typed").classList.toggle("hidden", !!SpeechRecognitionCtor);
+  showScreen("call");
+
+  await sleep(1600);
+  // Bail if the call was ended, or superseded by a newer one, while ringing.
+  if (!call.active || call.id !== callId) return;
+
+  $("call-status").textContent = "00:00";
+  call.timerId = setInterval(() => {
+    if (call.id !== callId) return;
+    call.seconds += 1;
+    const m = String(Math.floor(call.seconds / 60)).padStart(2, "0");
+    const s = String(call.seconds % 60).padStart(2, "0");
+    $("call-status").textContent = `${m}:${s}`;
+  }, 1000);
+
+  speakNextScammerLine();
+}
+
+function speakNextScammerLine() {
+  if (!call.active) return;
+  const lines = scammerCallLines(call.scenario);
+  const line = lines[call.lineIndex % lines.length];
+  call.lineIndex += 1;
+  addCallLine("them", line);
+  speak(line);
+}
+
+function endCall() {
+  call.active = false;
+  if (call.timerId) clearInterval(call.timerId);
+  call.timerId = null;
+  stopListening();
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  renderCallLog();
+  showScreen("phone");
+}
+
+function handleUserSpoke(text) {
+  if (!call.active || !text.trim()) return;
+  addCallLine("you", text.trim());
+  setTimeout(() => speakNextScammerLine(), 900);
+}
+
+function startListening() {
+  if (!SpeechRecognitionCtor || call.recognizing) return;
+  const rec = new SpeechRecognitionCtor();
+  rec.lang = "en-IN";
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+
+  rec.onresult = (e) => {
+    const said = e.results[0][0].transcript;
+    handleUserSpoke(said);
+  };
+  rec.onerror = () => {
+    // Mic blocked or unavailable — fall back to the typed box so the call
+    // is still usable instead of silently doing nothing.
+    $("call-typed").classList.remove("hidden");
+  };
+  rec.onend = () => {
+    call.recognizing = false;
+    $("call-listening").classList.add("hidden");
+    $("call-mic").classList.remove("is-recording");
+  };
+
+  call.recognition = rec;
+  call.recognizing = true;
+  $("call-listening").classList.remove("hidden");
+  $("call-mic").classList.add("is-recording");
+  try {
+    rec.start();
+  } catch (e) {
+    call.recognizing = false;
+  }
+}
+
+function stopListening() {
+  if (call.recognition && call.recognizing) {
+    try { call.recognition.stop(); } catch (e) { /* already stopped */ }
+  }
+  call.recognizing = false;
+  $("call-listening").classList.add("hidden");
+  $("call-mic").classList.remove("is-recording");
+}
+
+function wireCallControls() {
+  $("call-end").addEventListener("click", endCall);
+  $("call-mic").addEventListener("click", () => {
+    if (!SpeechRecognitionCtor) {
+      $("call-typed").classList.remove("hidden");
+      $("call-typed-input").focus();
+      return;
+    }
+    if (call.recognizing) stopListening();
+    else startListening();
+  });
+  $("call-typed-input").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const val = e.currentTarget.value;
+    e.currentTarget.value = "";
+    handleUserSpoke(val);
+  });
 }
 
 // ---- Camera ----
@@ -705,9 +900,20 @@ function applySettingChange(row) {
   if (row.key === "dark") {
     $("phone").classList.toggle("is-light", !row.on);
   }
+  if ((row.key === "wifi" || row.key === "airplane") && isOnline()) {
+    deliverPendingMessages();
+  }
   updateStatusBars();
+  updateConnectivityBanner();
   renderSettings();
   renderControlCenter();
+}
+
+// A thin "waiting for network" strip in the chat, like WhatsApp shows.
+function updateConnectivityBanner() {
+  const banner = $("wa-offline-banner");
+  if (!banner) return;
+  banner.classList.toggle("hidden", isOnline());
 }
 
 function statusBarIconsHTML() {
@@ -1013,8 +1219,10 @@ document.addEventListener("DOMContentLoaded", () => {
   wireControls();
   wireAppNavigation();
   wireControlCenterDrag();
+  wireCallControls();
   renderControlCenter();
   updateStatusBars();
+  updateConnectivityBanner();
   updateRealClock();
   setInterval(updateRealClock, 15000);
   initSimulationObserver();

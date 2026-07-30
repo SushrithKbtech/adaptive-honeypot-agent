@@ -221,6 +221,9 @@
                   <span><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></span>
                 </div>
               </div>
+              <div class="wa-offline-banner hidden" id="wa-offline-banner">
+                <span class="wa-offline-banner__spinner"></span> Waiting for network…
+              </div>
               <div class="wa-body" id="sim-messages">
                 <div class="wa-encryption-note">🔒 Messages are simulated for this demo — no live model calls</div>
               </div>
@@ -332,6 +335,28 @@
                 <div class="game-final__score" id="game-final-score">8 / 10</div>
                 <div class="game-final__msg" id="game-final-msg">Nice instincts!</div>
                 <button class="icon-btn icon-btn--primary" id="game-replay">↺ Play Again</button>
+              </div>
+            </div>
+
+            <!-- IN-CALL SCREEN: scammer speaks via TTS, you reply via mic -->
+            <div class="screen screen--call" id="screen-call">
+              <div class="status-bar status-bar--wa"><span class="status-bar__time">9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="call-top">
+                <div class="call-avatar" id="call-avatar">🎯</div>
+                <div class="call-name" id="call-name">KBC Lucky Draw</div>
+                <div class="call-status" id="call-status">calling…</div>
+              </div>
+              <div class="call-transcript" id="call-transcript"></div>
+              <div class="call-listening hidden" id="call-listening">
+                <span class="call-listening__dot"></span> listening…
+              </div>
+              <div class="call-typed hidden" id="call-typed">
+                <input class="call-typed__input" id="call-typed-input" type="text"
+                       placeholder="Type your reply and press Enter" maxlength="140" autocomplete="off">
+              </div>
+              <div class="call-actions">
+                <button class="call-btn call-btn--mic" id="call-mic" title="Hold to talk">🎤</button>
+                <button class="call-btn call-btn--end" id="call-end" title="End call">📞</button>
               </div>
             </div>
 
