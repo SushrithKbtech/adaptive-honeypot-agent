@@ -525,3 +525,41 @@ ul { margin: 0; padding: 0; list-style: none; }
 }
 .footer a { color: var(--teal-strong); }
 .footer__note { margin-top: 8px; font-size: 0.76rem; max-width: 480px; margin-inline: auto; }
+
+/* ============================================================================
+   SCAM PICKER MODAL
+============================================================================ */
+.picker-backdrop {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(4, 6, 11, 0.72); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  opacity: 0; transition: opacity .25s ease;
+}
+.picker-backdrop.is-shown { opacity: 1; }
+.picker-modal {
+  position: relative; width: 100%; max-width: 640px; max-height: 82vh; overflow-y: auto;
+  background: var(--panel-solid); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 32px 30px; box-shadow: 0 40px 90px -30px rgba(0,0,0,0.7);
+  transform: translateY(14px) scale(0.98); transition: transform .28s cubic-bezier(.22,.9,.32,1);
+}
+.picker-backdrop.is-shown .picker-modal { transform: translateY(0) scale(1); }
+.picker-modal h3 { font-size: 1.35rem; margin-bottom: 8px; padding-right: 30px; }
+.picker-lede { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 22px; }
+.picker-close {
+  position: absolute; top: 22px; right: 22px; width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid var(--border); background: transparent; color: var(--text-dim);
+  cursor: pointer; font-size: 0.9rem; transition: all .15s;
+}
+.picker-close:hover { color: var(--text); border-color: var(--text-faint); }
+.picker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .picker-grid { grid-template-columns: 1fr; } }
+.picker-option {
+  display: flex; align-items: flex-start; gap: 12px; text-align: left;
+  background: var(--panel); border: 1px solid var(--border-soft); border-radius: var(--radius-sm);
+  padding: 14px 16px; cursor: pointer; transition: all .15s; font-family: var(--sans);
+}
+.picker-option:hover { border-color: var(--teal); background: rgba(45, 212, 191, 0.06); transform: translateY(-1px); }
+.picker-option__icon { font-size: 1.5rem; flex: 0 0 auto; line-height: 1.3; }
+.picker-option__label { font-weight: 600; font-size: 0.94rem; color: var(--text); margin-bottom: 3px; }
+.picker-option__teaser { font-size: 0.8rem; color: var(--text-dim); line-height: 1.4; }
+.picker-option.is-safe { border-color: rgba(45, 212, 191, 0.3); }

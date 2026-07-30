@@ -24,6 +24,57 @@ const MIC_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" str
 const SEND_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg>';
 
 /* ============================================================================
+   SCAM PICKER MODAL — shown before the phone boots, so the visitor chooses
+   which scam to watch instead of always seeing the same default one.
+============================================================================ */
+function renderPicker() {
+  const grid = $("picker-grid");
+  grid.innerHTML = "";
+  SCENARIOS.forEach((sc) => {
+    const btn = document.createElement("button");
+    btn.className = "picker-option" + (sc.verdict === "safe" ? " is-safe" : "");
+    btn.innerHTML = `
+      <span class="picker-option__icon">${sc.icon}</span>
+      <span>
+        <span class="picker-option__label">${sc.label}</span>
+        <span class="picker-option__teaser">${sc.teaser || ""}</span>
+      </span>`;
+    btn.addEventListener("click", () => choosePickerScenario(sc.id));
+    grid.appendChild(btn);
+  });
+}
+
+function openPicker() {
+  const backdrop = $("picker-backdrop");
+  backdrop.classList.remove("hidden");
+  setTimeout(() => backdrop.classList.add("is-shown"), 20);
+}
+
+function closePicker() {
+  const backdrop = $("picker-backdrop");
+  backdrop.classList.remove("is-shown");
+  setTimeout(() => backdrop.classList.add("hidden"), 250);
+}
+
+function choosePickerScenario(id) {
+  closePicker();
+  const scenario = SCENARIOS.find((s) => s.id === id) || SCENARIOS[0];
+  state.scenario = scenario;
+  setActiveTab(scenario.id);
+  updateWaHeader();
+
+  document.getElementById("simulation").scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // Force a full fresh boot for the chosen scenario, even if one already played.
+  state.runId += 1;
+  state.bootedOnce = false;
+  state.booting = false;
+  $("phone-notification").classList.add("hidden");
+  $("phone-notification").classList.remove("is-shown", "is-pressed");
+  runBootSequence();
+}
+
+/* ============================================================================
    SCENARIO TABS
 ============================================================================ */
 function renderScenarioTabs() {
@@ -284,7 +335,7 @@ function showVerdictBanner(scenario) {
     ? `no scam indicators · ${Math.round(scenario.finalReport.confidenceLevel * 100)}% risk score`
     : `${scenario.finalReport.scamType} · ${Math.round(scenario.finalReport.confidenceLevel * 100)}% confidence`;
   banner.classList.remove("hidden");
-  requestAnimationFrame(() => banner.classList.add("is-shown"));
+  setTimeout(() => banner.classList.add("is-shown"), 20);
 }
 
 function hideVerdictBanner() {
@@ -406,10 +457,16 @@ function wireControls() {
     startFreshConversation(true);
   });
 
-  // Hero CTA kicks off the whole boot -> notification -> WhatsApp sequence
-  // immediately, rather than waiting for the section to scroll into view.
-  $("btn-watch-sim").addEventListener("click", () => {
-    if (!state.bootedOnce && !state.booting) runBootSequence();
+  // Hero CTA opens the scam picker first — the boot/notification/WhatsApp
+  // sequence only starts once a scam type is actually chosen.
+  $("btn-watch-sim").addEventListener("click", (e) => {
+    e.preventDefault();
+    openPicker();
+  });
+
+  $("picker-close").addEventListener("click", closePicker);
+  $("picker-backdrop").addEventListener("click", (e) => {
+    if (e.target.id === "picker-backdrop") closePicker();
   });
 }
 
@@ -445,18 +502,19 @@ function initSimulationObserver() {
     (entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting && !state.bootedOnce && !state.booting) {
-          runBootSequence();
+          openPicker();
           observer.disconnect();
         }
       });
     },
-    { threshold: 0.25 }
+    { threshold: 0.4 }
   );
   observer.observe(section);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   renderScenarioTabs();
+  renderPicker();
   updateWaHeader();
   wireControls();
   checkApiStatus();
