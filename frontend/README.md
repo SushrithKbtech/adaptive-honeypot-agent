@@ -47,8 +47,21 @@ no build step required. Since it lives in a subfolder of the main repo, set the 
 - **Netlify**: Site settings → Build & deploy → Base directory → `frontend`.
 - **GitHub Pages**: point the Pages source at the `frontend` folder on the `main` branch.
 
-The backend (`../src`) is unaffected — it keeps deploying from the repo root (e.g. Railway),
+The backend (`../src`) is unaffected — it keeps deploying from the repo root (e.g. Railway/Render),
 so both frontend and backend auto-deploy independently from the same repo and branch.
+
+## Why deploy the backend at all, if this demo is scripted?
+
+Fair question — this site never calls the real API for its conversations, so it would technically
+run fine even if the backend were never deployed. But the backend *is* the actual project: the
+real GUVI hackathon submission that calls GPT-4.1-mini and talks to actual scammers. This showcase
+site is just a portfolio wrapper around it.
+
+The one functional link between the two is the hero badge, which pings the backend's `/health`
+endpoint to prove "this isn't just a mockup, the real API is actually live." Skip deploying the
+backend and the badge just falls back to "idle" — the demo below still works perfectly either way.
+But without it deployed somewhere, the whole thing would just be a good-looking fake with nothing
+real behind it, which defeats the point of showing it on a resume.
 
 ## Files
 

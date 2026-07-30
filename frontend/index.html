@@ -41,13 +41,9 @@
   <!-- ============================= HERO ============================= -->
   <header class="hero">
     <div class="hero__inner">
-      <div class="badge badge--live">
-        <span class="badge__dot" id="api-status-dot"></span>
-        <span id="api-status-text">Checking live API…</span>
-      </div>
       <h1 class="hero__title">
-        It keeps scammers <span class="text-teal">talking.</span><br>
-        Then it takes their <span class="text-red">details.</span>
+        An AI agent that detects <span class="text-teal">scam messages</span><br>
+        and extracts actionable <span class="text-red">threat intelligence.</span>
       </h1>
       <p class="hero__subtitle">
         An adaptive honeypot agent that spots scam messages in real time, replies like a
@@ -141,7 +137,7 @@
             <!-- HOME SCREEN -->
             <div class="screen screen--home" id="screen-home">
               <div class="status-bar">
-                <span>9:41</span>
+                <span class="status-bar__time">9:41</span>
                 <span class="status-bar__icons">📶 📡 🔋</span>
               </div>
               <div class="home__clock-wrap">
@@ -192,14 +188,26 @@
               </div>
             </div>
 
+            <!-- WHATSAPP CHAT LIST (multiple contacts, like a real inbox) -->
+            <div class="screen screen--app" id="screen-whatsapp-list">
+              <div class="status-bar"><span class="status-bar__time">9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="app-header">
+                <button class="app-back" data-back aria-label="Back">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+                </button>
+                <div class="app-header__title">WhatsApp</div>
+              </div>
+              <div class="wa-chat-list" id="wa-chat-list"></div>
+            </div>
+
             <!-- WHATSAPP SCREEN -->
             <div class="screen screen--whatsapp" id="screen-whatsapp">
               <div class="status-bar status-bar--wa">
-                <span>9:41</span>
+                <span class="status-bar__time">9:41</span>
                 <span class="status-bar__icons">📶 📡 🔋</span>
               </div>
               <div class="wa-header">
-                <button class="wa-back" id="wa-back-btn" aria-label="Back to home">
+                <button class="wa-back" id="wa-back-btn" aria-label="Back to chat list">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
                 </button>
                 <div class="wa-avatar" id="wa-avatar">🎯</div>
@@ -223,18 +231,19 @@
                   <div class="verdict-banner__sub" id="verdict-sub">bank_fraud · 97% confidence</div>
                 </div>
               </div>
-              <div class="wa-inputbar">
+              <div class="wa-inputbar" id="wa-inputbar">
                 <span class="wa-input__emoji">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 10.5h.01M15.5 10.5h.01M8 15c1 1.2 2.4 2 4 2s3-.8 4-2"/></svg>
                 </span>
                 <div class="wa-input__field"><span id="wa-input-text"></span><span class="wa-caret" id="wa-caret"></span></div>
+                <input class="wa-live-input" id="wa-live-input" type="text" placeholder="Type a message" maxlength="140" autocomplete="off">
                 <span class="wa-input__send" id="wa-send-icon"></span>
               </div>
             </div>
 
             <!-- PHONE APP: call log -->
             <div class="screen screen--app" id="screen-phone">
-              <div class="status-bar"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="status-bar"><span class="status-bar__time">9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
               <div class="app-header">
                 <button class="app-back" data-back aria-label="Back">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
@@ -247,7 +256,7 @@
 
             <!-- CAMERA APP -->
             <div class="screen screen--app screen--camera" id="screen-camera">
-              <div class="status-bar status-bar--wa"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="status-bar status-bar--wa"><span class="status-bar__time">9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
               <div class="app-header app-header--overlay">
                 <button class="app-back" data-back aria-label="Back">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
@@ -264,7 +273,7 @@
 
             <!-- SETTINGS APP -->
             <div class="screen screen--app" id="screen-settings">
-              <div class="status-bar"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="status-bar"><span class="status-bar__time">9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
               <div class="app-header">
                 <button class="app-back" data-back aria-label="Back">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
@@ -276,7 +285,7 @@
 
             <!-- GALLERY APP: case files from the simulated scenarios -->
             <div class="screen screen--app" id="screen-gallery">
-              <div class="status-bar"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="status-bar"><span class="status-bar__time">9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
               <div class="app-header">
                 <button class="app-back" data-back aria-label="Back">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
@@ -288,7 +297,7 @@
 
             <!-- MAIL APP -->
             <div class="screen screen--app" id="screen-mail">
-              <div class="status-bar"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="status-bar"><span class="status-bar__time">9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
               <div class="app-header">
                 <button class="app-back" id="mail-back-btn" aria-label="Back">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
@@ -301,7 +310,7 @@
 
             <!-- SCAM SPOTTER GAME -->
             <div class="screen screen--app" id="screen-game">
-              <div class="status-bar"><span>9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
+              <div class="status-bar"><span class="status-bar__time">9:41</span><span class="status-bar__icons">📶 📡 🔋</span></div>
               <div class="app-header">
                 <button class="app-back" data-back aria-label="Back">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
@@ -325,6 +334,15 @@
                 <button class="icon-btn icon-btn--primary" id="game-replay">↺ Play Again</button>
               </div>
             </div>
+
+            <!-- CONTROL CENTER — pull down from the top of any screen -->
+            <div class="control-center hidden" id="control-center">
+              <div class="control-center__handle"></div>
+              <div class="control-center__grid" id="control-center-grid"></div>
+            </div>
+
+            <!-- Invisible drag zone at the very top of the phone for the pull-down gesture -->
+            <div class="drag-zone" id="drag-zone"></div>
 
           </div>
         </div>
@@ -411,7 +429,7 @@
 </main>
 
 <footer class="footer">
-  <p>Built by Sushrith K. &middot; <a href="https://github.com/SushrithKbtech/finalguvi" target="_blank" rel="noopener">Source on GitHub</a></p>
+  <p><a href="https://github.com/SushrithKbtech/finalguvi" target="_blank" rel="noopener">Source on GitHub</a></p>
   <p class="footer__note">Every conversation on this page is a scripted simulation for demonstration purposes — no live model calls, no real scammers were harmed.</p>
 </footer>
 

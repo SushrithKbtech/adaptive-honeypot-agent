@@ -19,29 +19,53 @@ const SCENARIOS = [
     contactSub: "+91 92339 04471",
     messages: [
       { who: "scammer", text: "🎉 CONGRATULATIONS! Your number has been selected for KBC Lucky Draw 2026. You have WON ₹25,00,000! Reply YES to claim your prize before it expires." },
-      { who: "agent", text: "Wait, really?? Me only? I never even entered any KBC lucky draw, how did my number get selected sir?" },
+      { who: "agent", variants: [
+        "Wait, really?? Me only? I never even entered any KBC lucky draw, how did my number get selected sir?",
+        "Omg wait what, seriously? I don't even remember entering any KBC draw, how did they pick my number sir?",
+        "Hold on, are you sure this is for me? I never signed up for any lucky draw like this, how does this work?"
+      ] },
       { who: "scammer", text: "Yes maam, your number was picked randomly from Jio/Airtel users database. This is official, organized by Reliance Jio Rewards Division. To claim, you need to pay a small processing/tax fee of ₹4,999.",
         reveal: [{ type: "orgNames", label: "Org name", value: "Jio Rewards Division" }] },
-      { who: "agent", text: "Oh wow, I am surprised only. Which company is this exactly, and can I get your employee ID or the official reference number for this lucky draw?" },
+      { who: "agent", variants: [
+        "Oh wow, I am surprised only. Which company is this exactly, and can I get your employee ID or the official reference number for this lucky draw?",
+        "Arre this is unbelievable. Which company is running this exactly, and what's your employee ID or a reference number for it?",
+        "Wow okay, I'm still processing this. Can you tell me the company name properly, plus your employee ID and a reference number?"
+      ] },
       { who: "scammer", text: "My employee ID is JR-4521. Reference number is KBC-2026-88213. Pay the fee to UPI ID kbc.rewards@ybl and the prize will be credited within 24 hours.",
         reveal: [
           { type: "employeeIds", label: "Employee ID", value: "JR-4521" },
           { type: "caseIds", label: "Reference #", value: "KBC-2026-88213" },
           { type: "upiIds", label: "UPI ID", value: "kbc.rewards@ybl" }
         ] },
-      { who: "agent", text: "Okay, let me note that UPI down properly. If I need to call back for any issue, what number should I use?" },
+      { who: "agent", variants: [
+        "Okay, let me note that UPI down properly. If I need to call back for any issue, what number should I use?",
+        "Alright, noting the UPI ID now. In case anything goes wrong, what number can I call you back on?",
+        "Okay noted. Just in case there's an issue later, which number should I use to reach you?"
+      ] },
       { who: "scammer", text: "You can call our helpline +91 98765 43210 for any queries. Please hurry, offer expires in 2 hours only.",
         reveal: [{ type: "phoneNumbers", label: "Callback #", value: "+91 98765 43210" }] },
-      { who: "agent", text: "I'm trying to pay now but the UPI app is showing an error, not going through. Is there a bank account number I can transfer to directly instead?" },
+      { who: "agent", variants: [
+        "I'm trying to pay now but the UPI app is showing an error, not going through. Is there a bank account number I can transfer to directly instead?",
+        "Hmm the UPI payment is failing on my end, keeps giving error. Can you give me a bank account number so I can transfer directly?",
+        "The UPI isn't going through for some reason. Do you have an account number I could transfer to instead?"
+      ] },
       { who: "scammer", text: "No problem, transfer to account number 50100234567890, IFSC SBIN0001234, in the name of Jio Rewards Pvt Ltd.",
         reveal: [
           { type: "bankAccounts", label: "Bank account", value: "50100234567890" },
           { type: "ifscCodes", label: "IFSC", value: "SBIN0001234" }
         ] },
-      { who: "agent", text: "One second, let me check with my brother before sending anything this big. Is there an official website where I can verify this lucky draw first?" },
+      { who: "agent", variants: [
+        "One second, let me check with my brother before sending anything this big. Is there an official website where I can verify this lucky draw first?",
+        "Wait, let me just check with my brother first before sending this much money. Is there a website I can use to verify this is real?",
+        "Hold on, this is a big amount, let me confirm with family first. Do you have an official site where I can check this lucky draw?"
+      ] },
       { who: "scammer", text: "Yes sir, check www.jio-lucky-rewards-claim.xyz/verify — enter your number there to confirm winner status.",
         reveal: [{ type: "phishingLinks", label: "Link", value: "jio-lucky-rewards-claim.xyz/verify" }] },
-      { who: "agent", text: "Okay, I noted everything down. Let me check this website first before I send any payment, I'll message you back shortly." }
+      { who: "agent", variants: [
+        "Okay, I noted everything down. Let me check this website first before I send any payment, I'll message you back shortly.",
+        "Alright, I've written it all down. Let me look at the website first, will message you back in a bit.",
+        "Okay got it all noted. Give me a moment to check the site before I pay, I'll come back to you."
+      ] }
     ],
     finalReport: {
       scamType: "lottery_prize",
@@ -70,25 +94,49 @@ const SCENARIOS = [
     contactSub: "+91 98211 33452",
     messages: [
       { who: "scammer", text: "Dear customer, your SBI account will be BLOCKED within 2 hours due to incomplete KYC. Share the OTP sent to your Aadhaar-linked mobile immediately to avoid suspension." },
-      { who: "agent", text: "Oh no, this is scary, I was not expecting any bank alert like this. Sir which branch is this regarding, and can you confirm my account will really be blocked?" },
+      { who: "agent", variants: [
+        "Oh no, this is scary, I was not expecting any bank alert like this. Sir which branch is this regarding, and can you confirm my account will really be blocked?",
+        "Wait what, this is scary, I never got a message like this before. Which branch is this from, and will my account actually get blocked?",
+        "Oh god, I did not expect this at all. Sir can you tell me which branch this is regarding, is my account really going to be blocked?"
+      ] },
       { who: "scammer", text: "Yes maam, this is from SBI KYC Verification Cell, Mumbai branch. Your account ending 4521 will be permanently frozen if not verified today. Share the OTP you just received.",
         reveal: [{ type: "orgNames", label: "Org name", value: "SBI KYC Verification Cell" }] },
-      { who: "agent", text: "OTP is not coming only sir, let me check once. Can you tell me your employee ID so I can note it down properly?" },
+      { who: "agent", variants: [
+        "OTP is not coming only sir, let me check once. Can you tell me your employee ID so I can note it down properly?",
+        "Sir the OTP isn't coming through, let me check my phone once. Meanwhile can you give me your employee ID?",
+        "I don't see any OTP yet sir, one second. Can you share your employee ID so I have it noted?"
+      ] },
       { who: "scammer", text: "My employee ID is SBI-KYC-7734. Please hurry maam, OTP is time sensitive, it will expire in 5 minutes.",
         reveal: [{ type: "employeeIds", label: "Employee ID", value: "SBI-KYC-7734" }] },
-      { who: "agent", text: "I'm getting worried now. If I need to call back to confirm this is really from the bank, what is the official number I should use?" },
+      { who: "agent", variants: [
+        "I'm getting worried now. If I need to call back to confirm this is really from the bank, what is the official number I should use?",
+        "I'm getting really tense now. Is there a number I can call back on to confirm this is actually from the bank?",
+        "This is making me nervous. If I want to verify this is genuinely the bank calling, what number should I use?"
+      ] },
       { who: "scammer", text: "You can call our verification desk at 9123456780, that is the direct line.",
         reveal: [{ type: "phoneNumbers", label: "Callback #", value: "9123456780" }] },
-      { who: "agent", text: "Okay, actually the OTP page on my phone is not opening properly. Is there a link I should use to update KYC directly?" },
+      { who: "agent", variants: [
+        "Okay, actually the OTP page on my phone is not opening properly. Is there a link I should use to update KYC directly?",
+        "Hmm, the OTP screen isn't loading properly on my end. Do you have a link I can use to update the KYC directly?",
+        "Actually my phone isn't showing the OTP page correctly. Is there a direct link for the KYC update?"
+      ] },
       { who: "scammer", text: "Yes, use this secure link: sbi-ekyc-verify.in/update to complete it fast.",
         reveal: [{ type: "phishingLinks", label: "Link", value: "sbi-ekyc-verify.in/update" }] },
-      { who: "agent", text: "Let me verify once before doing anything. Also, if there's any charge for this KYC update, which UPI ID should I use?" },
+      { who: "agent", variants: [
+        "Let me verify once before doing anything. Also, if there's any charge for this KYC update, which UPI ID should I use?",
+        "Let me just double check before proceeding. Also if there's some fee for this KYC thing, which UPI should I pay to?",
+        "One minute, let me confirm this properly first. And if there's a charge involved for KYC, what UPI ID is it?"
+      ] },
       { who: "scammer", text: "There is a small verification charge of ₹1 for account activation, pay to sbikyc.verify@oksbi to keep the process moving.",
         reveal: [
           { type: "upiIds", label: "UPI ID", value: "sbikyc.verify@oksbi" },
           { type: "amounts", label: "Amount", value: "₹1" }
         ] },
-      { who: "agent", text: "This is not seeming correct honestly. Let me visit my branch directly and confirm with them before I do anything further." }
+      { who: "agent", variants: [
+        "This is not seeming correct honestly. Let me visit my branch directly and confirm with them before I do anything further.",
+        "Honestly this isn't feeling right. I'll go to my branch directly and check with them before doing anything more.",
+        "Something about this isn't adding up. Let me just visit the branch in person and confirm before proceeding further."
+      ] }
     ],
     finalReport: {
       scamType: "bank_fraud",
@@ -117,25 +165,49 @@ const SCENARIOS = [
     contactSub: "+91 90090 12873",
     messages: [
       { who: "scammer", text: "This is Delhi Traffic Police. An e-challan CH-2026-88341 has been issued against vehicle DL 04 AB 1234 for signal jump. Pay ₹1000 within 24 hours or license will be suspended." },
-      { who: "agent", text: "Oh no, this is a shock. I did not expect any challan, sir which violation is this exactly for?" },
+      { who: "agent", variants: [
+        "Oh no, this is a shock. I did not expect any challan, sir which violation is this exactly for?",
+        "Wait, this is a shock, I wasn't expecting any challan at all. Sir which violation are you referring to exactly?",
+        "Oh no, this caught me off guard. What exactly is this violation for sir?"
+      ] },
       { who: "scammer", text: "Signal jump recorded on camera at ITO junction on 25th July. If not paid, case goes to court and your license will be suspended." },
-      { who: "agent", text: "Sir, I'm not understanding this properly, that's not even my usual route. Can you share your officer ID and which police station this is from?" },
+      { who: "agent", variants: [
+        "Sir, I'm not understanding this properly, that's not even my usual route. Can you share your officer ID and which police station this is from?",
+        "Sir I'm confused, I don't even usually go that way. Can you tell me your officer ID and which station this is from?",
+        "Sir this doesn't make sense to me, that's not my regular route even. What's your officer ID and which station are you from?"
+      ] },
       { who: "scammer", text: "My officer ID is DL-TP-5567, from ITO Traffic Station. Please pay quickly to avoid court summons.",
         reveal: [{ type: "employeeIds", label: "Officer ID", value: "DL-TP-5567" }] },
-      { who: "agent", text: "Just a second, let me check this once. What is the official portal I should use to verify and pay this challan?" },
+      { who: "agent", variants: [
+        "Just a second, let me check this once. What is the official portal I should use to verify and pay this challan?",
+        "Give me one minute, let me look into this. Which is the official site I should use to check and pay this challan?",
+        "Hold on, let me verify this first. What's the correct government portal for checking and paying this?"
+      ] },
       { who: "scammer", text: "Use parivahan-echallan-pay.in to check and pay directly, faster than the government site.",
         reveal: [{ type: "phishingLinks", label: "Link", value: "parivahan-echallan-pay.in" }] },
-      { who: "agent", text: "Okay, I'm trying to pay now but the portal is asking for a UPI ID to redirect to. Which UPI should I use directly?" },
+      { who: "agent", variants: [
+        "Okay, I'm trying to pay now but the portal is asking for a UPI ID to redirect to. Which UPI should I use directly?",
+        "Alright, I'm on the portal now but it wants a UPI ID to redirect. Which UPI should I enter directly?",
+        "Okay trying to pay, but the site is asking me for a UPI ID first. Which one should I use?"
+      ] },
       { who: "scammer", text: "Pay directly to trafficchallan.dl@ybl, ₹1000, and send a screenshot to this WhatsApp number 9988776655 for confirmation.",
         reveal: [
           { type: "upiIds", label: "UPI ID", value: "trafficchallan.dl@ybl" },
           { type: "phoneNumbers", label: "WhatsApp #", value: "9988776655" },
           { type: "amounts", label: "Amount", value: "₹1000" }
         ] },
-      { who: "agent", text: "One small doubt, can I get a case or reference number for this so I can note it down before paying?" },
+      { who: "agent", variants: [
+        "One small doubt, can I get a case or reference number for this so I can note it down before paying?",
+        "Just one doubt, is there a case or reference number for this? I want to note it before paying.",
+        "Quick question, can you give me a reference number for this challan before I pay?"
+      ] },
       { who: "scammer", text: "Reference number is REF-CH-99213, keep it safe.",
         reveal: [{ type: "caseIds", label: "Reference #", value: "REF-CH-99213" }] },
-      { who: "agent", text: "Let me verify this on the official Parivahan website first before paying anything, I'll get back to you." }
+      { who: "agent", variants: [
+        "Let me verify this on the official Parivahan website first before paying anything, I'll get back to you.",
+        "I'll check this on the actual Parivahan site first before making any payment, will get back to you shortly.",
+        "Let me confirm this through the official government portal first, then I'll pay. I'll message you back."
+      ] }
     ],
     finalReport: {
       scamType: "traffic_challan",
@@ -163,25 +235,49 @@ const SCENARIOS = [
     contactSub: "+91 88031 55290",
     messages: [
       { who: "scammer", text: "Dear consumer, your electricity connection will be DISCONNECTED TONIGHT at 9:30 PM due to unpaid bill. Contact our officer immediately to avoid disconnection." },
-      { who: "agent", text: "Oh no, this is worrying, I paid my bill recently. Sir which consumer number is this regarding?" },
+      { who: "agent", variants: [
+        "Oh no, this is worrying, I paid my bill recently. Sir which consumer number is this regarding?",
+        "Wait, this is concerning, I just paid my bill not long ago. Which consumer number are you referring to sir?",
+        "Oh no, that's worrying, I thought I already cleared this bill. Sir what consumer number is this for?"
+      ] },
       { who: "scammer", text: "Your consumer number shows as 204587690 in our records, with pending dues of ₹2,340. Immediate payment required to avoid disconnection tonight.",
         reveal: [{ type: "consumerNumbers", label: "Consumer #", value: "204587690" }] },
-      { who: "agent", text: "Let me check once, that doesn't sound right to me. Can I get your employee ID and which office you're calling from?" },
+      { who: "agent", variants: [
+        "Let me check once, that doesn't sound right to me. Can I get your employee ID and which office you're calling from?",
+        "Let me just verify, that amount doesn't seem right to me. What's your employee ID and which office is this?",
+        "Hold on, that doesn't sound correct. Can you tell me your employee ID and the office you're calling from?"
+      ] },
       { who: "scammer", text: "I am Officer Ramesh, employee ID EB-3391, from the Central Billing Office.",
         reveal: [{ type: "employeeIds", label: "Employee ID", value: "EB-3391" }] },
-      { who: "agent", text: "Okay sir, if I need to pay urgently, which UPI ID should I use?" },
+      { who: "agent", variants: [
+        "Okay sir, if I need to pay urgently, which UPI ID should I use?",
+        "Alright sir, if this needs to be paid right away, which UPI ID is it?",
+        "Okay, if I have to make the payment now, what UPI ID should I send it to?"
+      ] },
       { who: "scammer", text: "Pay to ebofficepay@ybl immediately, ₹2,340, and I will confirm on call once received.",
         reveal: [
           { type: "upiIds", label: "UPI ID", value: "ebofficepay@ybl" },
           { type: "amounts", label: "Amount", value: "₹2,340" }
         ] },
-      { who: "agent", text: "I'm trying to pay now but it's not going through. Is there a callback number in case the payment fails?" },
+      { who: "agent", variants: [
+        "I'm trying to pay now but it's not going through. Is there a callback number in case the payment fails?",
+        "I'm attempting the payment but it keeps failing. Do you have a number I can call if it doesn't go through?",
+        "The payment isn't processing on my end. Is there a callback number in case there's an issue?"
+      ] },
       { who: "scammer", text: "Call me directly on 8877665544 if there is any issue with the payment.",
         reveal: [{ type: "phoneNumbers", label: "Callback #", value: "8877665544" }] },
-      { who: "agent", text: "Just to be safe, is there an official link or app where I can check my actual bill status?" },
+      { who: "agent", variants: [
+        "Just to be safe, is there an official link or app where I can check my actual bill status?",
+        "Just to double check, is there an official app or website where I can see my real bill status?",
+        "To be sure, can you share an official link where I can verify my actual bill amount?"
+      ] },
       { who: "scammer", text: "Check quickpay-electricity-bill.in, enter your consumer number there to confirm the dues.",
         reveal: [{ type: "phishingLinks", label: "Link", value: "quickpay-electricity-bill.in" }] },
-      { who: "agent", text: "Let me confirm this with the official board helpline first before I send this payment." }
+      { who: "agent", variants: [
+        "Let me confirm this with the official board helpline first before I send this payment.",
+        "I'll just check with the official electricity board helpline before sending any payment.",
+        "Let me call the actual board helpline to confirm this first, before I pay anything."
+      ] }
     ],
     finalReport: {
       scamType: "electricity_bill",
@@ -208,26 +304,50 @@ const SCENARIOS = [
     contactSub: "+91 97042 66810",
     messages: [
       { who: "scammer", text: "Your parcel from Amazon could not be delivered due to incomplete address. Pay ₹49 redelivery fee within 24 hours or the parcel will be returned." },
-      { who: "agent", text: "Oh, this is unexpected, I was not waiting for any parcel. What is the tracking number for this?" },
+      { who: "agent", variants: [
+        "Oh, this is unexpected, I was not waiting for any parcel. What is the tracking number for this?",
+        "Huh, this is unexpected, I wasn't expecting any package. What's the tracking number on this?",
+        "Oh that's odd, I'm not waiting on any delivery. Can you give me the tracking number for this parcel?"
+      ] },
       { who: "scammer", text: "Tracking ID is AMZN7728819302IN. It's a package addressed to you, currently held at our facility.",
         reveal: [{ type: "trackingIds", label: "Tracking ID", value: "AMZN7728819302IN" }] },
-      { who: "agent", text: "Sir, I'm not understanding this delivery issue, which courier company are you from exactly?" },
+      { who: "agent", variants: [
+        "Sir, I'm not understanding this delivery issue, which courier company are you from exactly?",
+        "Sir I'm confused about this delivery thing, which courier are you calling from exactly?",
+        "I don't quite follow this delivery issue sir, which courier company is this?"
+      ] },
       { who: "scammer", text: "This is India Express Logistics, official Amazon delivery partner. My employee ID is IEL-2290.",
         reveal: [{ type: "employeeIds", label: "Employee ID", value: "IEL-2290" }] },
-      { who: "agent", text: "Okay, I'm trying to pay the redelivery fee, which UPI ID should I use?" },
+      { who: "agent", variants: [
+        "Okay, I'm trying to pay the redelivery fee, which UPI ID should I use?",
+        "Alright, trying to pay this redelivery charge now, which UPI ID is it?",
+        "Okay, going to pay the redelivery fee. Which UPI should I send it to?"
+      ] },
       { who: "scammer", text: "Pay to iel.redelivery@ybl, ₹49, and share the screenshot on WhatsApp 9090909090 to confirm.",
         reveal: [
           { type: "upiIds", label: "UPI ID", value: "iel.redelivery@ybl" },
           { type: "phoneNumbers", label: "WhatsApp #", value: "9090909090" },
           { type: "amounts", label: "Amount", value: "₹49" }
         ] },
-      { who: "agent", text: "One minute, let me check on the official Amazon app first — is there a link where I can track this myself?" },
+      { who: "agent", variants: [
+        "One minute, let me check on the official Amazon app first — is there a link where I can track this myself?",
+        "Hold on, let me look at the actual Amazon app first — do you have a link where I can track it myself?",
+        "Give me a second, checking the real Amazon app first. Is there a tracking link I can use myself?"
+      ] },
       { who: "scammer", text: "Check the status at amaz-redelivery-track.com using your tracking ID.",
         reveal: [{ type: "phishingLinks", label: "Link", value: "amaz-redelivery-track.com" }] },
-      { who: "agent", text: "Just checking, can I get an order ID as well so I can match this with my Amazon orders?" },
+      { who: "agent", variants: [
+        "Just checking, can I get an order ID as well so I can match this with my Amazon orders?",
+        "Just to confirm, is there an order ID too so I can match it against my Amazon orders?",
+        "Quick check — can you share the order ID so I can compare with my actual orders?"
+      ] },
       { who: "scammer", text: "Order ID is 408-8827193-2201. Please hurry, otherwise the parcel gets returned to sender today.",
         reveal: [{ type: "orderIds", label: "Order ID", value: "408-8827193-2201" }] },
-      { who: "agent", text: "Let me check this against my actual Amazon orders page first before paying anything." }
+      { who: "agent", variants: [
+        "Let me check this against my actual Amazon orders page first before paying anything.",
+        "I'll compare this with my real Amazon orders page before I pay anything.",
+        "Let me verify this against my actual order history first before sending any payment."
+      ] }
     ],
     finalReport: {
       scamType: "fake_delivery",
@@ -254,26 +374,50 @@ const SCENARIOS = [
     contactSub: "+91 77129 40098",
     messages: [
       { who: "scammer", text: "Hi! I'm from QuantumGrow Trading. Our AI trading bot gives guaranteed 15% daily returns on crypto. Just deposit ₹10,000 to start and double it in a week!" },
-      { who: "agent", text: "Oh interesting, I have not heard of QuantumGrow before. Which company runs this, and is it SEBI registered?" },
+      { who: "agent", variants: [
+        "Oh interesting, I have not heard of QuantumGrow before. Which company runs this, and is it SEBI registered?",
+        "Huh interesting, never heard of QuantumGrow before this. Who runs it, and is it SEBI registered?",
+        "That sounds interesting actually, I don't know QuantumGrow though. Which company operates this, is it SEBI registered?"
+      ] },
       { who: "scammer", text: "We are registered under QuantumGrow Fintech Pvt Ltd, operating from Singapore, fully compliant with international crypto regulations.",
         reveal: [{ type: "orgNames", label: "Org name", value: "QuantumGrow Fintech Pvt Ltd" }] },
-      { who: "agent", text: "That sounds promising honestly, but let me be careful. Can you share your employee ID or a company reference so I can look into it?" },
+      { who: "agent", variants: [
+        "That sounds promising honestly, but let me be careful. Can you share your employee ID or a company reference so I can look into it?",
+        "Sounds good honestly, but I want to be careful here. Can I get your employee ID or some company reference to check?",
+        "This does sound promising, but let me be cautious. Do you have an employee ID or reference I can look up?"
+      ] },
       { who: "scammer", text: "Sure, my advisor ID is QG-ADV-1187. You can also check our reviews on our official Telegram group.",
         reveal: [{ type: "employeeIds", label: "Advisor ID", value: "QG-ADV-1187" }] },
-      { who: "agent", text: "Okay, if I want to deposit the ₹10,000, which UPI ID or account should I use?" },
+      { who: "agent", variants: [
+        "Okay, if I want to deposit the ₹10,000, which UPI ID or account should I use?",
+        "Alright, if I'm putting in the ₹10,000, which UPI ID or bank account should I send it to?",
+        "Okay, for the ₹10,000 deposit, what UPI ID or account number do I use?"
+      ] },
       { who: "scammer", text: "Deposit to quantumgrow.invest@ybl, or transfer to account 34567891234 IFSC HDFC0002211 for larger amounts.",
         reveal: [
           { type: "upiIds", label: "UPI ID", value: "quantumgrow.invest@ybl" },
           { type: "bankAccounts", label: "Bank account", value: "34567891234" },
           { type: "ifscCodes", label: "IFSC", value: "HDFC0002211" }
         ] },
-      { who: "agent", text: "One thing though, is there an official website where I can see the trading dashboard and past returns?" },
+      { who: "agent", variants: [
+        "One thing though, is there an official website where I can see the trading dashboard and past returns?",
+        "One question though — is there an official site where I can view the dashboard and past returns?",
+        "Just curious, do you have a proper website where I can check the dashboard and past performance?"
+      ] },
       { who: "scammer", text: "Yes, register at quantumgrow-tradingapp.co and login with your phone number to see your dashboard.",
         reveal: [{ type: "phishingLinks", label: "Link", value: "quantumgrow-tradingapp.co" }] },
-      { who: "agent", text: "Let me confirm one more thing — if I need to reach you or the support team, what number should I call?" },
+      { who: "agent", variants: [
+        "Let me confirm one more thing — if I need to reach you or the support team, what number should I call?",
+        "One more thing — if I need to contact you or support, what's the number I should call?",
+        "Last question — what number can I reach you or your support team on if needed?"
+      ] },
       { who: "scammer", text: "Call our relationship manager directly on 7766554433 for any withdrawal or deposit help.",
         reveal: [{ type: "phoneNumbers", label: "Callback #", value: "7766554433" }] },
-      { who: "agent", text: "Alright, let me research this a bit more and check with a friend who trades before I send anything this big." }
+      { who: "agent", variants: [
+        "Alright, let me research this a bit more and check with a friend who trades before I send anything this big.",
+        "Okay, I'll look into this a bit more and check with a friend who trades before sending this much money.",
+        "Let me research this further and talk to a friend who trades before committing this big an amount."
+      ] }
     ],
     finalReport: {
       scamType: "investment_scam",
@@ -301,7 +445,11 @@ const SCENARIOS = [
     contactSub: "Official Business Account",
     messages: [
       { who: "scammer", text: "Your order #408-7723910-5541 (USB-C Charging Cable, 1 item) was delivered today at 2:14 PM. Thank you for shopping with us — tap to rate your experience." },
-      { who: "agent", text: "Thanks, got it! Delivery guy was quick this time 🙂" }
+      { who: "agent", variants: [
+        "Thanks, got it! Delivery guy was quick this time 🙂",
+        "Thanks for the update! That was fast delivery this time 🙂",
+        "Got it, thanks! Quicker than I expected 🙂"
+      ] }
     ],
     finalReport: {
       scamType: "none",

@@ -179,6 +179,26 @@ async function runBootSequence() {
 }
 
 /* ============================================================================
+   REAL CLOCK — the status bar and home screen show the visitor's actual
+   local time/date, refreshed every few seconds, like a real phone.
+============================================================================ */
+function updateRealClock() {
+  const now = new Date();
+  let h = now.getHours() % 12;
+  if (h === 0) h = 12;
+  const m = String(now.getMinutes()).padStart(2, "0");
+  const time = `${h}:${m}`;
+  document.querySelectorAll(".status-bar__time").forEach((el) => { el.textContent = time; });
+
+  const clockEl = document.querySelector(".home__clock");
+  if (clockEl) clockEl.textContent = time;
+  const dateEl = document.querySelector(".home__date");
+  if (dateEl) {
+    dateEl.textContent = now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  }
+}
+
+/* ============================================================================
    CHAT RENDERING
 ============================================================================ */
 function nextTimestamp() {
@@ -336,6 +356,13 @@ function showVerdictBanner(scenario) {
     : `${scenario.finalReport.scamType} · ${Math.round(scenario.finalReport.confidenceLevel * 100)}% confidence`;
   banner.classList.remove("hidden");
   setTimeout(() => banner.classList.add("is-shown"), 20);
+
+  // Auto-dismiss after 5s — but only if this same conversation is still the
+  // active one (guards against a stale timeout hiding a newer banner).
+  const runIdAtShow = state.runId;
+  setTimeout(() => {
+    if (state.runId === runIdAtShow) hideVerdictBanner();
+  }, 5000);
 }
 
 function hideVerdictBanner() {
@@ -356,6 +383,15 @@ function updatePlayButton() {
   }
 }
 
+// Agent lines carry a few phrasing variants so replays don't feel identical;
+// scammer lines stay fixed since their exact wording drives the reveal data.
+function pickMessageText(msg) {
+  if (msg.variants && msg.variants.length) {
+    return msg.variants[Math.floor(Math.random() * msg.variants.length)];
+  }
+  return msg.text;
+}
+
 async function playOneMessage(msg, runId) {
   if (msg.who === "scammer") {
     appendTyping("scammer");
@@ -372,11 +408,12 @@ async function playOneMessage(msg, runId) {
     }
     await sleep(450);
   } else {
+    const text = pickMessageText(msg);
     await sleep(350);
     if (runId !== state.runId) return;
-    const ok = await typeIntoInputField(msg.text, runId);
+    const ok = await typeIntoInputField(text, runId);
     if (!ok || runId !== state.runId) return;
-    appendMessage("agent", msg.text);
+    appendMessage("agent", text);
     await sleep(300);
   }
 }
@@ -397,6 +434,7 @@ async function runConversation(runId) {
   updatePlayButton();
   renderReport(scenario);
   showVerdictBanner(scenario);
+  enableLiveChat();
 }
 
 function startFreshConversation(autoPlay) {
@@ -413,9 +451,52 @@ function startFreshConversation(autoPlay) {
   hideVerdictBanner();
   $("wa-input-text").textContent = "";
   $("wa-send-icon").innerHTML = MIC_SVG;
+  disableLiveChat();
   updatePlayButton();
 
   if (autoPlay) runConversation(runId);
+}
+
+// ---- Free typing in WhatsApp once the scripted conversation has finished ----
+function enableLiveChat() {
+  const bar = $("wa-inputbar");
+  bar.classList.add("is-live");
+  const input = $("wa-live-input");
+  input.value = "";
+  input.focus();
+}
+
+function disableLiveChat() {
+  $("wa-inputbar").classList.remove("is-live");
+  $("wa-live-input").value = "";
+}
+
+function sendLiveMessage() {
+  const input = $("wa-live-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  appendMessage("agent", text);
+  replyToLiveMessage();
+}
+
+async function replyToLiveMessage() {
+  const runId = state.runId;
+  appendTyping("scammer");
+  await sleep(900 + Math.random() * 700);
+  if (runId !== state.runId) return;
+  removeTyping();
+  const scenario = state.scenario;
+  const pool = scenario.verdict === "safe"
+    ? ["Thanks for letting us know!", "Noted, have a great day!", "Appreciate the quick reply 🙂"]
+    : [
+        "Sir please hurry, this offer is time sensitive.",
+        "Waiting for your confirmation sir, please complete it soon.",
+        "Any update on the payment sir?",
+        "Sir are you still there? Please respond quickly.",
+        "This will lapse soon, please don't delay further."
+      ];
+  appendMessage("scammer", pool[Math.floor(Math.random() * pool.length)]);
 }
 
 /* ============================================================================
@@ -432,6 +513,7 @@ const appState = {
   ],
   cameraShots: 0,
   mailViewingDetail: false,
+  waOpened: new Set(),
   game: { order: [], index: 0, score: 0, answered: false }
 };
 
@@ -439,11 +521,16 @@ function goHome() {
   showScreen("home");
 }
 
+function goToWhatsAppList() {
+  renderWhatsAppChatList();
+  showScreen("whatsapp-list");
+}
+
 function wireAppNavigation() {
   document.querySelectorAll(".app-back[data-back]").forEach((btn) => {
     btn.addEventListener("click", goHome);
   });
-  $("wa-back-btn").addEventListener("click", goHome);
+  $("wa-back-btn").addEventListener("click", goToWhatsAppList);
 
   $("icon-phone").addEventListener("click", () => {
     renderCallLog();
@@ -483,6 +570,53 @@ function wireAppNavigation() {
   $("game-btn-scam").addEventListener("click", () => answerGame(true));
   $("game-next").addEventListener("click", nextGameQuestion);
   $("game-replay").addEventListener("click", startGame);
+
+  // Live chat (only active once the scripted conversation has finished)
+  $("wa-live-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendLiveMessage();
+  });
+  $("wa-send-icon").addEventListener("click", () => {
+    if ($("wa-inputbar").classList.contains("is-live")) sendLiveMessage();
+  });
+}
+
+// ---- WhatsApp chat list: multiple contacts, like a real inbox ----
+function renderWhatsAppChatList() {
+  const list = $("wa-chat-list");
+  list.innerHTML = "";
+  SCENARIOS.forEach((sc) => {
+    const opener = sc.messages.find((m) => m.who === "scammer");
+    const row = document.createElement("div");
+    row.className = "wa-chat-list__item";
+    const unread = appState.waOpened.has(sc.id) ? "" : '<span class="wa-chat-list__unread"></span>';
+    row.innerHTML = `
+      <div class="wa-chat-list__avatar">${sc.icon}</div>
+      <div class="wa-chat-list__info">
+        <div class="wa-chat-list__name">${sc.contactName}</div>
+        <div class="wa-chat-list__preview">${opener ? opener.text : ""}</div>
+      </div>
+      <div class="wa-chat-list__meta">
+        <span class="wa-chat-list__time">${sc.verdict === "safe" ? "9:41" : "9:4" + (SCENARIOS.indexOf(sc) % 9)}</span>
+        ${unread}
+      </div>`;
+    row.addEventListener("click", () => openWhatsAppChat(sc.id));
+    list.appendChild(row);
+  });
+}
+
+// Opening a chat from the WhatsApp list is "explore freely" mode — it does
+// NOT auto-play the scripted scenario. It just opens the thread and hands
+// control straight to the user, who can type whatever they want. (The full
+// scripted walkthrough is what the hero picker / notification flow is for.)
+function openWhatsAppChat(id) {
+  const scenario = SCENARIOS.find((s) => s.id === id) || SCENARIOS[0];
+  appState.waOpened.add(id);
+  state.scenario = scenario;
+  setActiveTab(scenario.id);
+  updateWaHeader();
+  showScreen("whatsapp");
+  startFreshConversation(false);
+  enableLiveChat();
 }
 
 // ---- Phone: call log ----
@@ -546,11 +680,110 @@ function renderSettings() {
       <span class="settings-row__icon">${row.icon}</span>
       <span class="settings-row__label">${row.label}</span>
       <button class="settings-toggle${row.on ? " is-on" : ""}" aria-label="${row.label}"></button>`;
-    el.querySelector(".settings-toggle").addEventListener("click", (e) => {
+    el.querySelector(".settings-toggle").addEventListener("click", () => {
       row.on = !row.on;
-      e.currentTarget.classList.toggle("is-on", row.on);
+      applySettingChange(row);
     });
     list.appendChild(el);
+  });
+}
+
+// ---- Shared toggle state: Settings rows + Control Center tiles both read
+// and write the same appState.settings, so either surface stays in sync.
+function applySettingChange(row) {
+  if (row.key === "dark") {
+    $("phone").classList.toggle("is-light", !row.on);
+  }
+  updateStatusBars();
+  renderSettings();
+  renderControlCenter();
+}
+
+function statusBarIconsHTML() {
+  const on = {};
+  appState.settings.forEach((s) => { on[s.key] = s.on; });
+  if (on.airplane) return "✈️ 🔋";
+  const parts = [];
+  if (on.wifi) parts.push("📶");
+  parts.push("📡");
+  if (on.bt) parts.push("🔵");
+  parts.push("🔋");
+  return parts.join(" ");
+}
+
+function updateStatusBars() {
+  const html = statusBarIconsHTML();
+  document.querySelectorAll(".status-bar__icons").forEach((el) => { el.textContent = html; });
+}
+
+// ---- Control Center: pull down from the top of any screen ----
+function renderControlCenter() {
+  const grid = $("control-center-grid");
+  grid.innerHTML = "";
+  appState.settings.forEach((row) => {
+    const tile = document.createElement("div");
+    tile.className = "cc-tile" + (row.on ? " is-on" : "");
+    tile.innerHTML = `<span class="cc-tile__icon">${row.icon}</span><span class="cc-tile__label">${row.label}</span>`;
+    tile.addEventListener("click", () => {
+      row.on = !row.on;
+      applySettingChange(row);
+    });
+    grid.appendChild(tile);
+  });
+}
+
+function wireControlCenterDrag() {
+  const zone = $("drag-zone");
+  const cc = $("control-center");
+  let dragging = false;
+  let startY = 0;
+  let isOpen = false;
+
+  const openCC = () => {
+    cc.classList.remove("is-dragging", "hidden");
+    cc.style.transform = "";
+    cc.classList.add("is-open");
+    isOpen = true;
+  };
+  const closeCC = () => {
+    cc.classList.remove("is-dragging");
+    cc.style.transform = "";
+    cc.classList.remove("is-open");
+    isOpen = false;
+  };
+
+  zone.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    startY = e.clientY;
+    cc.classList.remove("hidden");
+    cc.classList.add("is-dragging");
+    zone.setPointerCapture(e.pointerId);
+  });
+  zone.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    const height = cc.offsetHeight || 220;
+    const progress = Math.max(0, Math.min(1, dy / height));
+    cc.style.transform = `translateY(${-100 + progress * 100}%)`;
+  });
+  const endDrag = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    const dy = e.clientY - startY;
+    const height = cc.offsetHeight || 220;
+    if (Math.abs(dy) < 6) {
+      // Treat as a simple tap on the status bar — just toggle it.
+      if (isOpen) closeCC(); else openCC();
+      return;
+    }
+    if (dy > height * 0.35) openCC(); else closeCC();
+  };
+  zone.addEventListener("pointerup", endDrag);
+  zone.addEventListener("pointercancel", endDrag);
+
+  // Tapping the open panel's background/handle (not a tile) closes it again.
+  cc.addEventListener("click", (e) => {
+    if (e.target === cc || e.target.classList.contains("control-center__handle")) closeCC();
   });
 }
 
@@ -690,7 +923,9 @@ function showGameFinal() {
 function wireControls() {
   $("btn-play").addEventListener("click", () => {
     if (state.stepIndex >= state.scenario.messages.length) {
-      startFreshConversation(true);
+      // Finished — offer the picker so the user can pick what to watch next
+      // (possibly a different scam type) rather than just repeating this one.
+      openPicker();
       return;
     }
     state.playing = !state.playing;
@@ -698,7 +933,7 @@ function wireControls() {
     if (state.playing) runConversation(state.runId);
   });
 
-  $("btn-replay").addEventListener("click", () => startFreshConversation(true));
+  $("btn-replay").addEventListener("click", () => openPicker());
 
   $("btn-reboot").addEventListener("click", () => {
     state.runId += 1; // invalidate any in-flight conversation
@@ -709,18 +944,17 @@ function wireControls() {
     runBootSequence();
   });
 
-  // Optional manual fallback: tapping the WhatsApp icon directly on the
-  // home screen also opens the chat, in case someone wants to skip waiting
-  // for the notification.
+  // Manually tapping the WhatsApp icon on the home screen opens the chat
+  // list (like a real app), letting you pick which contact to open —
+  // separate from the auto-boot notification flow, which opens a specific
+  // conversation directly since that's what tapping a notification would do.
   $("wa-icon").addEventListener("click", async () => {
     if (state.booting || !$("screen-home").classList.contains("is-active")) return;
     $("phone-notification").classList.add("hidden");
     $("phone-notification").classList.remove("is-shown", "is-pressed");
     await tapWhatsAppIcon();
-    showScreen("whatsapp");
     state.bootedOnce = true;
-    updateWaHeader();
-    startFreshConversation(true);
+    goToWhatsAppList();
   });
 
   // Hero CTA opens the scam picker first — the boot/notification/WhatsApp
@@ -734,29 +968,6 @@ function wireControls() {
   $("picker-backdrop").addEventListener("click", (e) => {
     if (e.target.id === "picker-backdrop") closePicker();
   });
-}
-
-/* ============================================================================
-   LIVE API STATUS BADGE (optional, zero-cost GET to /health)
-============================================================================ */
-async function checkApiStatus() {
-  const dot = $("api-status-dot");
-  const text = $("api-status-text");
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 9000);
-    const res = await fetch("https://honeypot-api-8r4t.onrender.com/health", { signal: controller.signal });
-    clearTimeout(timer);
-    if (res.ok) {
-      dot.classList.add("is-online");
-      text.textContent = "Live backend running";
-      return;
-    }
-    throw new Error("not ok");
-  } catch (e) {
-    dot.classList.add("is-offline");
-    text.textContent = "Backend idle (cold start) — demo below is fully simulated";
-  }
 }
 
 /* ============================================================================
@@ -784,6 +995,10 @@ document.addEventListener("DOMContentLoaded", () => {
   updateWaHeader();
   wireControls();
   wireAppNavigation();
-  checkApiStatus();
+  wireControlCenterDrag();
+  renderControlCenter();
+  updateStatusBars();
+  updateRealClock();
+  setInterval(updateRealClock, 15000);
   initSimulationObserver();
 });
