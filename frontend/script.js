@@ -422,7 +422,7 @@ async function checkApiStatus() {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 4000);
-    const res = await fetch("https://finalguvi-production.up.railway.app/health", { signal: controller.signal });
+    const res = await fetch("https://honeypot-api-8r4t.onrender.com/health", { signal: controller.signal });
     clearTimeout(timer);
     if (res.ok) {
       dot.classList.add("is-online");
