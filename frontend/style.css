@@ -211,7 +211,7 @@ ul { margin: 0; padding: 0; list-style: none; }
   width: 320px; height: 660px; border-radius: 46px;
   background: linear-gradient(160deg, #1c2230, #0c0f18);
   padding: 14px; box-shadow: 0 40px 90px -30px rgba(0,0,0,0.75), inset 0 0 0 2px rgba(255,255,255,0.06);
-  position: relative;
+  position: relative; overflow: hidden;
 
   /* ---- Phone-scoped theme tokens (dark = default) ---- */
   --ph-bg: #10151d;
