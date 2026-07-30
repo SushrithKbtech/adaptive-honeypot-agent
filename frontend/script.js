@@ -56,6 +56,17 @@ function closePicker() {
   setTimeout(() => backdrop.classList.add("hidden"), 250);
 }
 
+// Dismissing the picker without choosing a scenario (the ✕ or backdrop)
+// must not leave the phone stuck on the boot screen forever — its spinner
+// runs via plain CSS the instant it's visible, with or without JS ever
+// having kicked off runBootSequence(). So "unlock" straight to the home
+// screen instead, letting the user explore the phone manually.
+function unlockToHomeIfNeeded() {
+  if (state.bootedOnce || state.booting) return;
+  state.bootedOnce = true;
+  showScreen("home");
+}
+
 function choosePickerScenario(id) {
   closePicker();
   const scenario = SCENARIOS.find((s) => s.id === id) || SCENARIOS[0];
@@ -964,9 +975,15 @@ function wireControls() {
     openPicker();
   });
 
-  $("picker-close").addEventListener("click", closePicker);
+  $("picker-close").addEventListener("click", () => {
+    closePicker();
+    unlockToHomeIfNeeded();
+  });
   $("picker-backdrop").addEventListener("click", (e) => {
-    if (e.target.id === "picker-backdrop") closePicker();
+    if (e.target.id === "picker-backdrop") {
+      closePicker();
+      unlockToHomeIfNeeded();
+    }
   });
 }
 
