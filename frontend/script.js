@@ -47,12 +47,14 @@ function renderPicker() {
 function openPicker() {
   const backdrop = $("picker-backdrop");
   backdrop.classList.remove("hidden");
+  document.body.classList.add("is-modal-open");
   setTimeout(() => backdrop.classList.add("is-shown"), 20);
 }
 
 function closePicker() {
   const backdrop = $("picker-backdrop");
   backdrop.classList.remove("is-shown");
+  document.body.classList.remove("is-modal-open");
   setTimeout(() => backdrop.classList.add("hidden"), 250);
 }
 
