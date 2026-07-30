@@ -1,4 +1,4 @@
-# Adaptive Honeypot Agent — Live Showcase (Frontend)
+# satark.ai — Live Showcase (Frontend)
 
 A dark, phone-mockup showcase site for this repo's honeypot API — an LLM-powered agent that
 detects scam messages, keeps scammers engaged in natural conversation, and extracts actionable
