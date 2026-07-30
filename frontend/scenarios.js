@@ -1,7 +1,7 @@
 // ============================================================================
 // SIMULATED SCAM CONVERSATIONS
 // Scripted transcripts written in the same persona voice as the honeypot
-// agent's system prompts (src/honeypotAgent.js in the finalguvi repo).
+// agent's system prompts (src/honeypotAgent.js at the repo root).
 // Nothing here calls the live API — it's a deterministic, replayable demo
 // of how the agent behaves for each scam type.
 // ============================================================================
